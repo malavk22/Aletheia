@@ -1,0 +1,24 @@
+# Secrets
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+# Uploaded files (later versions)
+uploads/
+
+# Local-only docs (not pushed)
+docs/
+prompt.txt
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
