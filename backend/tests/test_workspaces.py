@@ -29,8 +29,11 @@ def test_creator_becomes_owner(client, db):
 
     workspace_id = client.post(WORKSPACES_URL, json={"name": "Contracts"}).json()["id"]
 
-    membership = db.scalar(select(WorkspaceMembership))
-    assert str(membership.workspace_id) == workspace_id
+    membership = db.scalar(
+        select(WorkspaceMembership).where(
+            WorkspaceMembership.workspace_id == uuid.UUID(workspace_id)
+        )
+    )
     assert membership.role == "owner"
 
 

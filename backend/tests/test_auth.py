@@ -69,6 +69,16 @@ def register_and_login(client):
     return client.post(LOGIN_URL, json=CREDENTIALS)
 
 
+def session_of_test_user(db):
+    # Looks the session up by its user, so rows that already exist in the
+    # database (real accounts) are never picked by mistake.
+    return db.scalar(
+        select(UserSession)
+        .join(User, User.id == UserSession.user_id)
+        .where(User.email == CREDENTIALS["email"])
+    )
+
+
 def test_login_sets_httponly_cookie(client):
     response = register_and_login(client)
 
@@ -140,7 +150,7 @@ def test_logout_without_cookie_is_harmless(client):
 
 def test_expired_session_is_rejected(client, db):
     register_and_login(client)
-    session = db.scalar(select(UserSession))
+    session = session_of_test_user(db)
     session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
     db.commit()
 
@@ -153,7 +163,7 @@ def test_session_token_is_stored_hashed(client, db):
     register_and_login(client)
     token = client.cookies["session"]
 
-    session = db.scalar(select(UserSession))
+    session = session_of_test_user(db)
 
     assert session.token_hash != token
     assert session.token_hash == hashlib.sha256(token.encode()).hexdigest()
