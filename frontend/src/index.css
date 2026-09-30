@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+
+/* Design values for the whole app. Use these names (bg-paper, text-ink,
+   border-line, bg-accent...) instead of one-off colours. */
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Source Serif 4 Variable', Georgia, serif;
+  /* Used only by the large wordmark. To try another typeface, change this line. */
+  --font-display: 'Newsreader Variable', Georgia, serif;
+
+  --color-paper: #faf9f6;
+  --color-paper-deep: #f2f0ea;
+  --color-surface: #ffffff;
+  --color-ink: #1b1a17;
+  --color-ink-muted: #5e5b54;
+  --color-line: #dedbd3;
+  --color-line-strong: #8a867b;
+  --color-accent: #1f3a5f;
+  --color-accent-hover: #172c49;
+  --color-danger: #9b2c1f;
+  --color-danger-soft: #fbedea;
+
+  /* "both" keeps an element transparent before its turn and visible afterwards. */
+  --animate-fade-in: fade-in 1s ease-in-out both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+  }
+}
