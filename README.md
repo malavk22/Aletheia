@@ -34,6 +34,9 @@ uvicorn app.main:app --reload   # http://localhost:8000/api/v1/health
 pytest                          # run tests
 ```
 
+Tests run in their own database, `aletheia_test`, which is created
+automatically on the first run. They never touch the `aletheia` database.
+
 ## Run the frontend locally
 
 Requirements: Node.js 22+. Start the backend first.
