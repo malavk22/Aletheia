@@ -2,18 +2,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { logout } from '../api/auth.ts'
 import { UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { Button } from '../components/Button.tsx'
-import { currentUserKey, useCurrentUser } from '../hooks/useCurrentUser.ts'
+import { CreateWorkspaceForm } from '../components/CreateWorkspaceForm.tsx'
+import { WorkspaceList } from '../components/WorkspaceList.tsx'
+import { clearSession, useCurrentUser } from '../hooks/useCurrentUser.ts'
 
-// The signed-in page. Deliberately bare for now: the workspace list replaces
-// the placeholder text in the next step.
+// The signed-in page: a header and the person's workspaces.
 export function AppPage() {
   const { data: user } = useCurrentUser()
   const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: logout,
-    // Clearing the user is what signs the page out: the route guard sees no
-    // user and goes to the sign-in page.
-    onSuccess: () => queryClient.setQueryData(currentUserKey, null),
+    onSuccess: () => clearSession(queryClient),
   })
 
   return (
@@ -30,7 +29,13 @@ export function AppPage() {
       </header>
       <main className="px-6 py-12 sm:px-12">
         <h1 className="font-serif text-3xl font-semibold tracking-tight">Workspaces</h1>
-        <p className="mt-2 text-sm text-ink-muted">Your workspaces will appear here.</p>
+        <p className="mt-2 text-sm text-ink-muted">
+          Each workspace keeps its own set of documents.
+        </p>
+        <div className="mt-8 max-w-2xl space-y-8">
+          <CreateWorkspaceForm />
+          <WorkspaceList />
+        </div>
       </main>
     </div>
   )
