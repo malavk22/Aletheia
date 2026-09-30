@@ -6,6 +6,7 @@ import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { AuthLayout } from '../components/AuthLayout.tsx'
 import { Button } from '../components/Button.tsx'
 import { FormError } from '../components/FormError.tsx'
+import { PasswordField } from '../components/PasswordField.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { currentUserKey } from '../hooks/useCurrentUser.ts'
 
@@ -38,13 +39,7 @@ export function LoginPage() {
           </FormError>
         )}
         <TextField label="Email" name="email" type="email" autoComplete="email" required />
-        <TextField
-          label="Password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
+        <PasswordField label="Password" name="password" autoComplete="current-password" required />
         <Button type="submit" className="w-full" loading={mutation.isPending}>
           Sign in
         </Button>

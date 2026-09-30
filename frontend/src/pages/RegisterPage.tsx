@@ -8,6 +8,7 @@ import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { AuthLayout } from '../components/AuthLayout.tsx'
 import { Button } from '../components/Button.tsx'
 import { FormError } from '../components/FormError.tsx'
+import { PasswordField } from '../components/PasswordField.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { currentUserKey } from '../hooks/useCurrentUser.ts'
 
@@ -61,10 +62,9 @@ export function RegisterPage() {
           required
           error={emailError}
         />
-        <TextField
+        <PasswordField
           label="Password"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           maxLength={128}
