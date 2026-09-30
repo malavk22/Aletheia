@@ -6,7 +6,7 @@ get answers backed by evidence from the source — not just AI-generated text.
 ## Status
 
 **V0.1 — Foundation (in progress).** Backend: accounts, login and workspaces.
-Frontend: register, sign in and log out.
+Frontend: register, sign in, log out and workspaces.
 
 ## Tech stack
 
