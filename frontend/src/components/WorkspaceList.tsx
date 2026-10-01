@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { listWorkspaces, workspacesKey } from '../api/workspaces.ts'
 import { Button } from './Button.tsx'
@@ -33,8 +34,13 @@ export function WorkspaceList() {
       {workspaces && workspaces.length > 0 && (
         <ul className="divide-y divide-line border-y border-line">
           {workspaces.map((workspace) => (
-            <li key={workspace.id} className="py-3 text-sm font-medium">
-              {workspace.name}
+            <li key={workspace.id}>
+              <Link
+                to={`/workspaces/${workspace.id}`}
+                className="block py-3 text-sm font-medium hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                {workspace.name}
+              </Link>
             </li>
           ))}
         </ul>
