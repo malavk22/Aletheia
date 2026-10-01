@@ -5,9 +5,9 @@ import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { documentsKey, uploadDocument } from '../api/documents.ts'
 import { Button } from './Button.tsx'
 
-type UploadResult = {
+type FailedUpload = {
   filename: string
-  error?: string
+  error: string
 }
 
 // Our own API's messages for these are written for people, so show them as-is.
@@ -21,7 +21,10 @@ function uploadErrorMessage(error: unknown) {
 export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [results, setResults] = useState<UploadResult[]>([])
+  // Only failures are listed here. A successful upload shows up in the
+  // document list itself, so a separate "uploaded" line would only go stale
+  // (for example after that document is deleted).
+  const [failures, setFailures] = useState<FailedUpload[]>([])
   const mutation = useMutation({
     mutationFn: (file: File) => uploadDocument(workspaceId, file),
     // Refresh the list after each file, so documents appear as they finish.
@@ -31,15 +34,14 @@ export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget
     const files = Array.from(input.files ?? [])
-    setResults([])
+    setFailures([])
 
     // One request per file, one after another, so each gets its own result.
     for (const file of files) {
       try {
         await mutation.mutateAsync(file)
-        setResults((previous) => [...previous, { filename: file.name }])
       } catch (error) {
-        setResults((previous) => [
+        setFailures((previous) => [
           ...previous,
           { filename: file.name, error: uploadErrorMessage(error) },
         ])
@@ -65,16 +67,26 @@ export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
           onChange={handleFiles}
         />
       </div>
-      {results.length > 0 && (
-        <ul className="mt-4 space-y-1 text-sm" aria-live="polite">
-          {results.map((result, index) => (
-            <li key={index} className={result.error ? 'text-danger' : 'text-ink-muted'}>
-              <span className="font-medium">{result.filename}</span>
-              {' — '}
-              {result.error ?? 'uploaded'}
-            </li>
-          ))}
-        </ul>
+      {failures.length > 0 && (
+        <div role="alert" className="mt-4 border-l-2 border-danger bg-danger-soft px-3 py-2">
+          <p className="text-sm font-medium text-danger">
+            {failures.length === 1 ? 'This file was not uploaded:' : 'These files were not uploaded:'}
+          </p>
+          <ul className="mt-1 space-y-0.5 text-sm text-danger">
+            {failures.map((failure, index) => (
+              <li key={index}>
+                <span className="font-medium">{failure.filename}</span> — {failure.error}
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => setFailures([])}
+            className="mt-2 rounded-sm text-sm font-medium text-danger underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
     </div>
   )
