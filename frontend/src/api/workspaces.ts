@@ -9,6 +9,14 @@ export type Workspace = {
 // list (creating a workspace) marks this key as out of date.
 export const workspacesKey = ['workspaces']
 
+export function workspaceKey(workspaceId: string) {
+  return ['workspaces', workspaceId]
+}
+
+export function getWorkspace(workspaceId: string) {
+  return api<Workspace>(`/workspaces/${workspaceId}`)
+}
+
 export function listWorkspaces() {
   return api<Workspace[]>('/workspaces')
 }
