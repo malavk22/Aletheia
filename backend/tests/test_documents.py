@@ -148,3 +148,59 @@ def test_other_users_cannot_upload_to_or_list_my_workspace(client, upload_dir):
     assert listed.status_code == 404
     # Only Ada's file is on disk.
     assert len(stored_files(upload_dir)) == 1
+
+
+def document_url(workspace_id, document_id):
+    return f"{documents_url(workspace_id)}/{document_id}"
+
+
+def test_delete_document_removes_row_and_file(client, upload_dir):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
+
+    response = client.delete(document_url(workspace_id, document_id))
+
+    assert response.status_code == 204
+    assert client.get(documents_url(workspace_id)).json() == []
+    assert stored_files(upload_dir) == []
+
+
+def test_delete_missing_document_is_not_found(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
+    client.delete(document_url(workspace_id, document_id))
+
+    deleted_twice = client.delete(document_url(workspace_id, document_id))
+    never_existed = client.delete(document_url(workspace_id, uuid.uuid4()))
+
+    assert deleted_twice.status_code == 404
+    assert never_existed.status_code == 404
+
+
+def test_delete_needs_the_document_to_be_in_that_workspace(client, upload_dir):
+    contracts = workspace_for(client, "ada@example.com")
+    document_id = upload(client, contracts, "lease.pdf", PDF_BYTES).json()["id"]
+    minutes = client.post("/api/v1/workspaces", json={"name": "Minutes"}).json()["id"]
+
+    # Ada is a member of both workspaces, but the document lives in Contracts.
+    response = client.delete(document_url(minutes, document_id))
+
+    assert response.status_code == 404
+    assert len(stored_files(upload_dir)) == 1
+
+
+def test_other_users_cannot_delete_my_document(client, upload_dir):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
+
+    workspace_for(client, "bob@example.com")  # now signed in as Bob
+    response = client.delete(document_url(workspace_id, document_id))
+
+    assert response.status_code == 404
+    assert len(stored_files(upload_dir)) == 1
+
+
+def test_delete_requires_login(client):
+    response = client.delete(document_url(uuid.uuid4(), uuid.uuid4()))
+
+    assert response.status_code == 401

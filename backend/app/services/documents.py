@@ -47,3 +47,24 @@ def list_documents(db: Session, workspace: Workspace) -> list[Document]:
             .order_by(Document.created_at.desc())
         )
     )
+
+
+def get_document(
+    db: Session, workspace: Workspace, document_id: uuid.UUID
+) -> Document | None:
+    # Matching on the workspace too means a document can only be reached
+    # through the workspace it belongs to.
+    return db.scalar(
+        select(Document).where(
+            Document.id == document_id, Document.workspace_id == workspace.id
+        )
+    )
+
+
+def delete_document(db: Session, document: Document) -> None:
+    path = document_path(document.workspace_id, document.id)
+    # Row first, file second: if removing the file failed we would only leave
+    # an unused file behind, never a row pointing at a missing file.
+    db.delete(document)
+    db.commit()
+    path.unlink(missing_ok=True)
