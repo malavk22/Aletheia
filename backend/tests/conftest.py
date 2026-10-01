@@ -45,6 +45,14 @@ def test_database():
     command.upgrade(Config(str(alembic_ini)), "head")
 
 
+@pytest.fixture(autouse=True)
+def upload_dir(tmp_path, monkeypatch):
+    # Every test gets its own empty, temporary upload folder, so no test can
+    # ever write into the real uploads folder.
+    monkeypatch.setattr(settings, "upload_dir", str(tmp_path))
+    return tmp_path
+
+
 @pytest.fixture
 def db():
     # Each test runs inside one transaction that is rolled back at the end,
