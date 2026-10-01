@@ -24,3 +24,7 @@ export function listWorkspaces() {
 export function createWorkspace(name: string) {
   return api<Workspace>('/workspaces', { method: 'POST', body: { name } })
 }
+
+export function deleteWorkspace(workspaceId: string) {
+  return api<void>(`/workspaces/${workspaceId}`, { method: 'DELETE' })
+}

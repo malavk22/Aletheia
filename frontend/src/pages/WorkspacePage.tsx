@@ -4,6 +4,7 @@ import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { getWorkspace, workspaceKey } from '../api/workspaces.ts'
 import { AppHeader } from '../components/AppHeader.tsx'
 import { Button } from '../components/Button.tsx'
+import { DeleteWorkspace } from '../components/DeleteWorkspace.tsx'
 import { DocumentList } from '../components/DocumentList.tsx'
 import { FormError } from '../components/FormError.tsx'
 import { UploadDocuments } from '../components/UploadDocuments.tsx'
@@ -62,6 +63,9 @@ export function WorkspacePage() {
             <div className="mt-8 max-w-3xl space-y-8">
               <UploadDocuments workspaceId={workspace.id} />
               <DocumentList workspaceId={workspace.id} />
+            </div>
+            <div className="mt-16">
+              <DeleteWorkspace workspace={workspace} />
             </div>
           </>
         )}
