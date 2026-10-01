@@ -11,10 +11,14 @@ class FileTooLarge(Exception):
     pass
 
 
+def workspace_folder(workspace_id: uuid.UUID) -> Path:
+    return Path(settings.upload_dir) / str(workspace_id)
+
+
 def document_path(workspace_id: uuid.UUID, document_id: uuid.UUID) -> Path:
     # Built only from ids we generated, never from the uploaded filename, so a
     # name like "../../evil.pdf" cannot place a file outside the upload folder.
-    return Path(settings.upload_dir) / str(workspace_id) / str(document_id)
+    return workspace_folder(workspace_id) / str(document_id)
 
 
 def save_file(source: BinaryIO, destination: Path) -> int:

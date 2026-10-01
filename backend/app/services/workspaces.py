@@ -1,8 +1,10 @@
+import shutil
 import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.documents.storage import workspace_folder
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMembership
 
@@ -36,3 +38,24 @@ def get_member_workspace(
     db: Session, user: User, workspace_id: uuid.UUID
 ) -> Workspace | None:
     return db.scalar(_workspaces_of(user).where(Workspace.id == workspace_id))
+
+
+def is_owner(db: Session, user: User, workspace: Workspace) -> bool:
+    role = db.scalar(
+        select(WorkspaceMembership.role).where(
+            WorkspaceMembership.user_id == user.id,
+            WorkspaceMembership.workspace_id == workspace.id,
+        )
+    )
+    return role == "owner"
+
+
+def delete_workspace(db: Session, workspace: Workspace) -> None:
+    folder = workspace_folder(workspace.id)
+    # The database removes the workspace's memberships and documents itself
+    # (ON DELETE CASCADE). Files on disk are ours to remove, and only after the
+    # rows are gone: at worst a folder is left behind, never a half-deleted
+    # workspace.
+    db.delete(workspace)
+    db.commit()
+    shutil.rmtree(folder, ignore_errors=True)
