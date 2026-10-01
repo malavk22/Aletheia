@@ -5,8 +5,11 @@ get answers backed by evidence from the source — not just AI-generated text.
 
 ## Status
 
-**V0.1 — Foundation (in progress).** Backend: accounts, login and workspaces.
-Frontend: register, sign in, log out and workspaces.
+**V0.1 — Foundation (done).** Accounts, sign in and workspaces, in the backend
+and the frontend.
+
+**V0.2 — Processing (in progress).** The backend accepts PDF and DOCX uploads
+into a workspace. Text extraction and the upload screen are next.
 
 ## Tech stack
 
