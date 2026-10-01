@@ -1,32 +1,12 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { logout } from '../api/auth.ts'
-import { UNREACHABLE_MESSAGE } from '../api/client.ts'
-import { Button } from '../components/Button.tsx'
+import { AppHeader } from '../components/AppHeader.tsx'
 import { CreateWorkspaceForm } from '../components/CreateWorkspaceForm.tsx'
 import { WorkspaceList } from '../components/WorkspaceList.tsx'
-import { clearSession, useCurrentUser } from '../hooks/useCurrentUser.ts'
 
-// The signed-in page: a header and the person's workspaces.
+// The signed-in home page: the person's workspaces.
 export function AppPage() {
-  const { data: user } = useCurrentUser()
-  const queryClient = useQueryClient()
-  const mutation = useMutation({
-    mutationFn: logout,
-    onSuccess: () => clearSession(queryClient),
-  })
-
   return (
     <div className="min-h-screen">
-      <header className="flex items-center justify-between gap-4 border-b border-line px-6 py-3 sm:px-12">
-        <p className="font-display text-2xl font-medium tracking-tight">Aletheia</p>
-        <div className="flex items-center gap-4">
-          {mutation.isError && <span className="text-sm text-danger">{UNREACHABLE_MESSAGE}</span>}
-          <span className="text-sm text-ink-muted">{user?.email}</span>
-          <Button variant="secondary" loading={mutation.isPending} onClick={() => mutation.mutate()}>
-            Log out
-          </Button>
-        </div>
-      </header>
+      <AppHeader />
       <main className="px-6 py-12 sm:px-12">
         <h1 className="font-serif text-3xl font-semibold tracking-tight">Workspaces</h1>
         <p className="mt-2 text-sm text-ink-muted">
