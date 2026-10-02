@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router'
 import { GuestOnly, RequireAuth } from './components/AuthGuards.tsx'
 import { AppPage } from './pages/AppPage.tsx'
+import { DocumentPage } from './pages/DocumentPage.tsx'
 import { LoginPage } from './pages/LoginPage.tsx'
 import { RegisterPage } from './pages/RegisterPage.tsx'
 import { WorkspacePage } from './pages/WorkspacePage.tsx'
@@ -12,6 +13,10 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <AppPage /> },
       { path: '/workspaces/:workspaceId', element: <WorkspacePage /> },
+      {
+        path: '/workspaces/:workspaceId/documents/:documentId',
+        element: <DocumentPage />,
+      },
     ],
   },
   {

@@ -1,24 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { deleteDocument, documentsKey, listDocuments } from '../api/documents.ts'
 import type { WorkspaceDocument } from '../api/documents.ts'
 import { Button } from './Button.tsx'
+import { DocumentDetails } from './DocumentDetails.tsx'
 import { FormError } from './FormError.tsx'
-
-const TYPE_LABELS: Record<string, string> = {
-  'application/pdf': 'PDF',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
-}
-
-function formatSize(bytes: number) {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatDate(isoDate: string) {
-  return new Date(isoDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-}
 
 export function DocumentList({ workspaceId }: { workspaceId: string }) {
   const {
@@ -57,27 +45,6 @@ export function DocumentList({ workspaceId }: { workspaceId: string }) {
   )
 }
 
-// Whether the document's text has been extracted yet.
-function DocumentStatus({ document }: { document: WorkspaceDocument }) {
-  if (document.status === 'ready') {
-    // A PDF is stored page by page; a Word file has no fixed pages, so it is
-    // stored section by section (split at its headings).
-    const unit = document.content_type === 'application/pdf' ? 'page' : 'section'
-    const count = document.part_count ?? 0
-    return (
-      <p className="mt-0.5 text-sm text-ink-muted">
-        Text extracted · {count} {count === 1 ? unit : `${unit}s`}
-      </p>
-    )
-  }
-  if (document.status === 'failed') {
-    return (
-      <p className="mt-0.5 text-sm text-danger">Text not extracted: {document.error}</p>
-    )
-  }
-  return <p className="mt-0.5 text-sm text-ink-muted">Waiting for text extraction</p>
-}
-
 function DocumentRow({
   workspaceId,
   document,
@@ -99,12 +66,13 @@ function DocumentRow({
   return (
     <li className="flex items-center justify-between gap-4 py-3">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{document.filename}</p>
-        <p className="mt-0.5 text-sm text-ink-muted">
-          {TYPE_LABELS[document.content_type] ?? 'File'} · {formatSize(document.size_bytes)} ·{' '}
-          {formatDate(document.created_at)}
-        </p>
-        <DocumentStatus document={document} />
+        <Link
+          to={`/workspaces/${workspaceId}/documents/${document.id}`}
+          className="block truncate text-sm font-medium hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+        >
+          {document.filename}
+        </Link>
+        <DocumentDetails document={document} />
         {mutation.isError && <p className="mt-0.5 text-sm text-danger">{UNREACHABLE_MESSAGE}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-1">

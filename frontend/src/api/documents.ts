@@ -36,3 +36,29 @@ export function uploadDocument(workspaceId: string, file: File) {
 export function deleteDocument(workspaceId: string, documentId: string) {
   return api<void>(`${documentsPath(workspaceId)}/${documentId}`, { method: 'DELETE' })
 }
+
+export type DocumentPart = {
+  position: number
+  // Where the text is: a page number (PDF) or the heading above it (DOCX).
+  page_number: number | null
+  heading: string | null
+  text: string
+}
+
+export function documentKey(workspaceId: string, documentId: string) {
+  return ['workspaces', workspaceId, 'documents', documentId]
+}
+
+export function getDocument(workspaceId: string, documentId: string) {
+  return api<WorkspaceDocument>(`${documentsPath(workspaceId)}/${documentId}`)
+}
+
+export function listParts(workspaceId: string, documentId: string) {
+  return api<DocumentPart[]>(`${documentsPath(workspaceId)}/${documentId}/parts`)
+}
+
+// The original file. A plain link to this opens a PDF in the browser and
+// downloads a Word file; the session cookie is sent with it automatically.
+export function documentFileUrl(workspaceId: string, documentId: string) {
+  return `/api/v1${documentsPath(workspaceId)}/${documentId}/file`
+}
