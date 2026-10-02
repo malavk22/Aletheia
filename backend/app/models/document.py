@@ -29,21 +29,34 @@ class Document(Base):
     status: Mapped[str] = mapped_column(String(20), server_default="pending")
     # Why processing failed, written for people ("This PDF is password-protected").
     error: Mapped[str | None] = mapped_column(String(255))
-    page_count: Mapped[int | None]
+    # How many parts were stored: pages for a PDF, sections for a DOCX.
+    part_count: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
 
-class DocumentPage(Base):
-    __tablename__ = "document_pages"
+class DocumentPart(Base):
+    """One piece of a document's text, with where it came from.
 
-    # The pair is the primary key: a document cannot have two "page 3"s.
+    A PDF is stored page by page (`page_number` set). A DOCX has no fixed
+    pages, so it is stored section by section (`heading` set, or empty for text
+    before the first heading). Citations later point at this location.
+    """
+
+    __tablename__ = "document_parts"
+
+    # The pair is the primary key: a document cannot have two parts at the
+    # same position.
     document_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
     )
-    # Counted from 1, the way people count pages, so citations read naturally.
-    page_number: Mapped[int] = mapped_column(primary_key=True)
-    # The text as extracted (only null characters removed). Empty if the page
-    # had no text.
+    # Reading order within the document, from 1.
+    position: Mapped[int] = mapped_column(primary_key=True)
+    # PDF only. Counted from 1, the way people count pages.
+    page_number: Mapped[int | None]
+    # DOCX only: the heading this text sits under.
+    heading: Mapped[str | None] = mapped_column(Text)
+    # The text as extracted (only null characters removed). Empty if the part
+    # had no text (for example a blank PDF page).
     text: Mapped[str] = mapped_column(Text)
