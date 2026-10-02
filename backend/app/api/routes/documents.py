@@ -10,12 +10,12 @@ from app.documents.storage import FileTooLarge
 from app.documents.validation import UnsupportedFileType
 from app.models.user import User
 from app.models.workspace import Workspace
-from app.schemas.document import DocumentPageRead, DocumentRead
+from app.schemas.document import DocumentPartRead, DocumentRead
 from app.services.documents import (
     delete_document,
     get_document,
     list_documents,
-    list_pages,
+    list_parts,
     upload_document,
 )
 
@@ -61,8 +61,8 @@ def delete(
     delete_document(db, document)
 
 
-@router.get("/{document_id}/pages", response_model=list[DocumentPageRead])
-def pages(
+@router.get("/{document_id}/parts", response_model=list[DocumentPartRead])
+def parts(
     document_id: uuid.UUID,
     workspace: Workspace = Depends(get_workspace_for_member),
     db: Session = Depends(get_db),
@@ -70,4 +70,4 @@ def pages(
     document = get_document(db, workspace, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    return list_pages(db, document)
+    return list_parts(db, document)

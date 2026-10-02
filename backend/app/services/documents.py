@@ -5,10 +5,14 @@ from typing import BinaryIO
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.documents.extraction import ExtractionFailed, extract_pdf_pages
+from app.documents.extraction import (
+    ExtractionFailed,
+    extract_docx_sections,
+    extract_pdf_pages,
+)
 from app.documents.storage import document_path, save_file
 from app.documents.validation import PDF, detect_content_type, display_name
-from app.models.document import Document, DocumentPage
+from app.models.document import Document, DocumentPart
 from app.models.user import User
 from app.models.workspace import Workspace
 
@@ -32,12 +36,12 @@ def upload_document(
         size_bytes=size,
         status="pending",
     )
-    pages = _extract_text(document, path)
+    parts = _extract_text(document, path)
     db.add(document)
     try:
-        # flush sends the document row first, so the pages can point at it.
+        # flush sends the document row first, so the parts can point at it.
         db.flush()
-        db.add_all(pages)
+        db.add_all(parts)
         db.commit()
     except BaseException:
         # No database row means nothing points at the file, so remove it.
@@ -46,37 +50,45 @@ def upload_document(
     return document
 
 
-def _extract_text(document: Document, path: Path) -> list[DocumentPage]:
-    """Set the document's status and return its pages (empty if none).
+def _extract_text(document: Document, path: Path) -> list[DocumentPart]:
+    """Set the document's status and return its parts (empty if none).
 
-    A failure here never fails the upload: the file is kept and the reason is
-    stored, so it can be processed again later (for example with OCR).
+    A PDF becomes one part per page; a DOCX one part per section. A failure
+    here never fails the upload: the file is kept and the reason is stored, so
+    it can be processed again later (for example with OCR).
     """
-    if document.content_type != PDF:
-        return []  # DOCX gets its own extraction step; it stays "pending".
-
     try:
         with path.open("rb") as stored:
-            texts = extract_pdf_pages(stored)
+            if document.content_type == PDF:
+                parts = [
+                    DocumentPart(position=number, page_number=number, text=text)
+                    for number, text in enumerate(extract_pdf_pages(stored), start=1)
+                ]
+            else:
+                parts = [
+                    DocumentPart(position=number, heading=heading, text=text)
+                    for number, (heading, text) in enumerate(
+                        extract_docx_sections(stored), start=1
+                    )
+                ]
     except ExtractionFailed as failure:
         document.status = "failed"
         document.error = str(failure)
         return []
 
+    for part in parts:
+        part.document_id = document.id
     document.status = "ready"
-    document.page_count = len(texts)
-    return [
-        DocumentPage(document_id=document.id, page_number=number, text=text)
-        for number, text in enumerate(texts, start=1)
-    ]
+    document.part_count = len(parts)
+    return parts
 
 
-def list_pages(db: Session, document: Document) -> list[DocumentPage]:
+def list_parts(db: Session, document: Document) -> list[DocumentPart]:
     return list(
         db.scalars(
-            select(DocumentPage)
-            .where(DocumentPage.document_id == document.id)
-            .order_by(DocumentPage.page_number)
+            select(DocumentPart)
+            .where(DocumentPart.document_id == document.id)
+            .order_by(DocumentPart.position)
         )
     )
 
