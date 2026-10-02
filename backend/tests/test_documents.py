@@ -2,13 +2,17 @@ import io
 import uuid
 import zipfile
 
+from pdfs import make_pdf
+from sqlalchemy import select
+
 from app.core.config import settings
+from app.models.document import DocumentPage
 
 PDF_TYPE = "application/pdf"
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
-# Only the first bytes matter to the upload check, so these are not full files.
-PDF_BYTES = b"%PDF-1.4\n% a tiny stand-in for a real PDF\n"
+# A real (tiny) PDF with text, so it passes the upload check and extraction.
+PDF_BYTES = make_pdf("Lease agreement")
 
 
 def zip_bytes(*names):
@@ -54,7 +58,16 @@ def test_upload_pdf_is_stored_and_listed(client, upload_dir):
     assert document["filename"] == "lease.pdf"
     assert document["content_type"] == PDF_TYPE
     assert document["size_bytes"] == len(PDF_BYTES)
-    assert set(document) == {"id", "filename", "content_type", "size_bytes", "created_at"}
+    assert set(document) == {
+        "id",
+        "filename",
+        "content_type",
+        "size_bytes",
+        "created_at",
+        "status",
+        "error",
+        "page_count",
+    }
     assert listed.json() == [document]
     # Stored under the document's id, inside its workspace's folder.
     stored = upload_dir / workspace_id / document["id"]
@@ -204,3 +217,70 @@ def test_delete_requires_login(client):
     response = client.delete(document_url(uuid.uuid4(), uuid.uuid4()))
 
     assert response.status_code == 401
+
+
+def pages_url(workspace_id, document_id):
+    return f"{document_url(workspace_id, document_id)}/pages"
+
+
+def test_text_pdf_is_ready_with_its_pages(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+
+    document = upload(
+        client, workspace_id, "lease.pdf", make_pdf("Clause one.", "Clause two.")
+    ).json()
+    pages = client.get(pages_url(workspace_id, document["id"])).json()
+
+    assert document["status"] == "ready"
+    assert document["error"] is None
+    assert document["page_count"] == 2
+    assert [page["page_number"] for page in pages] == [1, 2]
+    assert "Clause one." in pages[0]["text"]
+    assert "Clause two." in pages[1]["text"]
+
+
+def test_pdf_without_text_is_kept_but_marked_failed(client, upload_dir):
+    workspace_id = workspace_for(client, "ada@example.com")
+
+    response = upload(client, workspace_id, "scan.pdf", make_pdf("", ""))
+    document = response.json()
+
+    # The upload itself succeeds: the file is kept so it can be processed later.
+    assert response.status_code == 201
+    assert document["status"] == "failed"
+    assert "scanned" in document["error"]
+    assert document["page_count"] is None
+    assert client.get(pages_url(workspace_id, document["id"])).json() == []
+    assert len(stored_files(upload_dir)) == 1
+
+
+def test_docx_waits_for_its_own_extraction_step(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+
+    document = upload(client, workspace_id, "report.docx", DOCX_BYTES).json()
+
+    assert document["status"] == "pending"
+    assert document["page_count"] is None
+
+
+def test_pages_are_deleted_with_their_document(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
+    pages_of_document = select(DocumentPage).where(
+        DocumentPage.document_id == uuid.UUID(document_id)
+    )
+    assert len(db.scalars(pages_of_document).all()) == 1
+
+    client.delete(document_url(workspace_id, document_id))
+
+    assert db.scalars(pages_of_document).all() == []
+
+
+def test_other_users_cannot_read_my_pages(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
+
+    workspace_for(client, "bob@example.com")  # now signed in as Bob
+    response = client.get(pages_url(workspace_id, document_id))
+
+    assert response.status_code == 404
