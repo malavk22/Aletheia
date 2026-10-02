@@ -2,11 +2,12 @@ import io
 import uuid
 import zipfile
 
+from docxs import make_docx
 from pdfs import make_pdf
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.models.document import DocumentPage
+from app.models.document import DocumentPart
 
 PDF_TYPE = "application/pdf"
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -23,8 +24,8 @@ def zip_bytes(*names):
     return buffer.getvalue()
 
 
-# A real DOCX is a zip that contains word/document.xml.
-DOCX_BYTES = zip_bytes("[Content_Types].xml", "word/document.xml")
+# A real (tiny) Word file with a heading and text.
+DOCX_BYTES = make_docx(("heading", "Summary"), ("p", "Quarterly results."))
 
 
 def workspace_for(client, email):
@@ -66,7 +67,7 @@ def test_upload_pdf_is_stored_and_listed(client, upload_dir):
         "created_at",
         "status",
         "error",
-        "page_count",
+        "part_count",
     }
     assert listed.json() == [document]
     # Stored under the document's id, inside its workspace's folder.
@@ -219,8 +220,8 @@ def test_delete_requires_login(client):
     assert response.status_code == 401
 
 
-def pages_url(workspace_id, document_id):
-    return f"{document_url(workspace_id, document_id)}/pages"
+def parts_url(workspace_id, document_id):
+    return f"{document_url(workspace_id, document_id)}/parts"
 
 
 def test_text_pdf_is_ready_with_its_pages(client):
@@ -229,12 +230,13 @@ def test_text_pdf_is_ready_with_its_pages(client):
     document = upload(
         client, workspace_id, "lease.pdf", make_pdf("Clause one.", "Clause two.")
     ).json()
-    pages = client.get(pages_url(workspace_id, document["id"])).json()
+    pages = client.get(parts_url(workspace_id, document["id"])).json()
 
     assert document["status"] == "ready"
     assert document["error"] is None
-    assert document["page_count"] == 2
-    assert [page["page_number"] for page in pages] == [1, 2]
+    assert document["part_count"] == 2
+    assert [(page["position"], page["page_number"]) for page in pages] == [(1, 1), (2, 2)]
+    assert [page["heading"] for page in pages] == [None, None]
     assert "Clause one." in pages[0]["text"]
     assert "Clause two." in pages[1]["text"]
 
@@ -249,25 +251,52 @@ def test_pdf_without_text_is_kept_but_marked_failed(client, upload_dir):
     assert response.status_code == 201
     assert document["status"] == "failed"
     assert "scanned" in document["error"]
-    assert document["page_count"] is None
-    assert client.get(pages_url(workspace_id, document["id"])).json() == []
+    assert document["part_count"] is None
+    assert client.get(parts_url(workspace_id, document["id"])).json() == []
     assert len(stored_files(upload_dir)) == 1
 
 
-def test_docx_waits_for_its_own_extraction_step(client):
+def test_docx_is_ready_with_its_sections(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_docx(
+        ("p", "Prepared for the board."),
+        ("heading", "Revenue"),
+        ("p", "Revenue grew 12%."),
+        ("heading", "Risks"),
+        ("p", "Supplier costs are rising."),
+    )
+
+    document = upload(client, workspace_id, "report.docx", content).json()
+    sections = client.get(parts_url(workspace_id, document["id"])).json()
+
+    assert document["status"] == "ready"
+    assert document["part_count"] == 3
+    assert [
+        (s["position"], s["page_number"], s["heading"], s["text"]) for s in sections
+    ] == [
+        (1, None, None, "Prepared for the board."),
+        (2, None, "Revenue", "Revenue grew 12%."),
+        (3, None, "Risks", "Supplier costs are rising."),
+    ]
+
+
+def test_docx_without_text_is_kept_but_marked_failed(client, upload_dir):
     workspace_id = workspace_for(client, "ada@example.com")
 
-    document = upload(client, workspace_id, "report.docx", DOCX_BYTES).json()
+    response = upload(client, workspace_id, "blank.docx", make_docx())
+    document = response.json()
 
-    assert document["status"] == "pending"
-    assert document["page_count"] is None
+    assert response.status_code == 201
+    assert document["status"] == "failed"
+    assert "No text found" in document["error"]
+    assert len(stored_files(upload_dir)) == 1
 
 
 def test_pages_are_deleted_with_their_document(client, db):
     workspace_id = workspace_for(client, "ada@example.com")
     document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
-    pages_of_document = select(DocumentPage).where(
-        DocumentPage.document_id == uuid.UUID(document_id)
+    pages_of_document = select(DocumentPart).where(
+        DocumentPart.document_id == uuid.UUID(document_id)
     )
     assert len(db.scalars(pages_of_document).all()) == 1
 
@@ -281,6 +310,6 @@ def test_other_users_cannot_read_my_pages(client):
     document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
 
     workspace_for(client, "bob@example.com")  # now signed in as Bob
-    response = client.get(pages_url(workspace_id, document_id))
+    response = client.get(parts_url(workspace_id, document_id))
 
     assert response.status_code == 404
