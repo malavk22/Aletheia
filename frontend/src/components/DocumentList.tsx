@@ -57,6 +57,20 @@ export function DocumentList({ workspaceId }: { workspaceId: string }) {
   )
 }
 
+// Whether the document's text has been extracted yet.
+function DocumentStatus({ document }: { document: WorkspaceDocument }) {
+  if (document.status === 'ready') {
+    const pages = document.page_count === 1 ? '1 page' : `${document.page_count} pages`
+    return <p className="mt-0.5 text-sm text-ink-muted">Text extracted · {pages}</p>
+  }
+  if (document.status === 'failed') {
+    return (
+      <p className="mt-0.5 text-sm text-danger">Text not extracted: {document.error}</p>
+    )
+  }
+  return <p className="mt-0.5 text-sm text-ink-muted">Waiting for text extraction</p>
+}
+
 function DocumentRow({
   workspaceId,
   document,
@@ -83,6 +97,7 @@ function DocumentRow({
           {TYPE_LABELS[document.content_type] ?? 'File'} · {formatSize(document.size_bytes)} ·{' '}
           {formatDate(document.created_at)}
         </p>
+        <DocumentStatus document={document} />
         {mutation.isError && <p className="mt-0.5 text-sm text-danger">{UNREACHABLE_MESSAGE}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-1">

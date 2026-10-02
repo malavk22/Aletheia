@@ -7,6 +7,10 @@ export type WorkspaceDocument = {
   filename: string
   content_type: string
   size_bytes: number
+  // pending: not processed yet; ready: text extracted; failed: see `error`.
+  status: 'pending' | 'ready' | 'failed'
+  error: string | null
+  page_count: number | null
   created_at: string
 }
 
