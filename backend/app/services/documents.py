@@ -1,12 +1,14 @@
 import uuid
+from pathlib import Path
 from typing import BinaryIO
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.documents.extraction import ExtractionFailed, extract_pdf_pages
 from app.documents.storage import document_path, save_file
-from app.documents.validation import detect_content_type, display_name
-from app.models.document import Document
+from app.documents.validation import PDF, detect_content_type, display_name
+from app.models.document import Document, DocumentPage
 from app.models.user import User
 from app.models.workspace import Workspace
 
@@ -28,15 +30,55 @@ def upload_document(
         filename=display_name(filename)[:255],
         content_type=content_type,
         size_bytes=size,
+        status="pending",
     )
+    pages = _extract_text(document, path)
     db.add(document)
     try:
+        # flush sends the document row first, so the pages can point at it.
+        db.flush()
+        db.add_all(pages)
         db.commit()
     except BaseException:
         # No database row means nothing points at the file, so remove it.
         path.unlink(missing_ok=True)
         raise
     return document
+
+
+def _extract_text(document: Document, path: Path) -> list[DocumentPage]:
+    """Set the document's status and return its pages (empty if none).
+
+    A failure here never fails the upload: the file is kept and the reason is
+    stored, so it can be processed again later (for example with OCR).
+    """
+    if document.content_type != PDF:
+        return []  # DOCX gets its own extraction step; it stays "pending".
+
+    try:
+        with path.open("rb") as stored:
+            texts = extract_pdf_pages(stored)
+    except ExtractionFailed as failure:
+        document.status = "failed"
+        document.error = str(failure)
+        return []
+
+    document.status = "ready"
+    document.page_count = len(texts)
+    return [
+        DocumentPage(document_id=document.id, page_number=number, text=text)
+        for number, text in enumerate(texts, start=1)
+    ]
+
+
+def list_pages(db: Session, document: Document) -> list[DocumentPage]:
+    return list(
+        db.scalars(
+            select(DocumentPage)
+            .where(DocumentPage.document_id == document.id)
+            .order_by(DocumentPage.page_number)
+        )
+    )
 
 
 def list_documents(db: Session, workspace: Workspace) -> list[Document]:
