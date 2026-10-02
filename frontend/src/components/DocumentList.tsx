@@ -60,8 +60,15 @@ export function DocumentList({ workspaceId }: { workspaceId: string }) {
 // Whether the document's text has been extracted yet.
 function DocumentStatus({ document }: { document: WorkspaceDocument }) {
   if (document.status === 'ready') {
-    const pages = document.page_count === 1 ? '1 page' : `${document.page_count} pages`
-    return <p className="mt-0.5 text-sm text-ink-muted">Text extracted · {pages}</p>
+    // A PDF is stored page by page; a Word file has no fixed pages, so it is
+    // stored section by section (split at its headings).
+    const unit = document.content_type === 'application/pdf' ? 'page' : 'section'
+    const count = document.part_count ?? 0
+    return (
+      <p className="mt-0.5 text-sm text-ink-muted">
+        Text extracted · {count} {count === 1 ? unit : `${unit}s`}
+      </p>
+    )
   }
   if (document.status === 'failed') {
     return (
