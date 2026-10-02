@@ -313,3 +313,83 @@ def test_other_users_cannot_read_my_pages(client):
     response = client.get(parts_url(workspace_id, document_id))
 
     assert response.status_code == 404
+
+
+def file_url(workspace_id, document_id):
+    return f"{document_url(workspace_id, document_id)}/file"
+
+
+def test_get_one_document(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    uploaded = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()
+
+    response = client.get(document_url(workspace_id, uploaded["id"]))
+
+    assert response.status_code == 200
+    assert response.json() == uploaded
+
+
+def test_original_pdf_opens_in_the_browser(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "Lease 2026.pdf", PDF_BYTES).json()["id"]
+
+    response = client.get(file_url(workspace_id, document_id))
+
+    assert response.status_code == 200
+    assert response.content == PDF_BYTES
+    assert response.headers["content-type"] == PDF_TYPE
+    # "inline" asks the browser to display it rather than download it.
+    assert response.headers["content-disposition"].startswith("inline")
+    assert "Lease%202026.pdf" in response.headers["content-disposition"]
+    # Tells the browser not to second-guess the type we decided.
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_original_docx_downloads(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "report.docx", DOCX_BYTES).json()["id"]
+
+    response = client.get(file_url(workspace_id, document_id))
+
+    assert response.status_code == 200
+    assert response.content == DOCX_BYTES
+    assert response.headers["content-type"] == DOCX_TYPE
+    assert response.headers["content-disposition"].startswith("attachment")
+
+
+def test_other_users_cannot_get_my_document_or_file(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
+
+    workspace_for(client, "bob@example.com")  # now signed in as Bob
+
+    assert client.get(document_url(workspace_id, document_id)).status_code == 404
+    assert client.get(file_url(workspace_id, document_id)).status_code == 404
+
+
+def test_file_is_only_reachable_through_its_own_workspace(client):
+    contracts = workspace_for(client, "ada@example.com")
+    document_id = upload(client, contracts, "lease.pdf", PDF_BYTES).json()["id"]
+    minutes = client.post("/api/v1/workspaces", json={"name": "Minutes"}).json()["id"]
+
+    response = client.get(file_url(minutes, document_id))
+
+    assert response.status_code == 404
+
+
+def test_missing_file_on_disk_is_not_found(client, upload_dir):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
+    (upload_dir / workspace_id / document_id).unlink()
+
+    response = client.get(file_url(workspace_id, document_id))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "File not found"}
+
+
+def test_document_and_file_require_login(client):
+    workspace_id, document_id = uuid.uuid4(), uuid.uuid4()
+
+    assert client.get(document_url(workspace_id, document_id)).status_code == 401
+    assert client.get(file_url(workspace_id, document_id)).status_code == 401
