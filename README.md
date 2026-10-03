@@ -8,8 +8,9 @@ get answers backed by evidence from the source — not just AI-generated text.
 **V0.1 — Foundation (done).** Accounts, sign in and workspaces, in the backend
 and the frontend.
 
-**V0.2 — Processing (in progress).** The backend accepts PDF and DOCX uploads
-into a workspace. Text extraction and the upload screen are next.
+**V0.2 — Processing.** Upload PDF and DOCX files into a workspace; their text is
+extracted page by page (PDF) or section by section (Word) in the background,
+with OCR for scanned pages.
 
 ## Tech stack
 
@@ -19,7 +20,9 @@ into a workspace. Text extraction and the upload screen are next.
 
 ## Run the backend locally
 
-Requirements: Python 3.11+, PostgreSQL.
+Requirements: Python 3.11+, PostgreSQL, and Tesseract for reading scanned PDFs
+(OCR). On Windows: `winget install --id UB-Mannheim.TesseractOCR`. Without
+Tesseract everything else works; scanned PDFs are marked as failed.
 
 ```bash
 cd backend
