@@ -1,10 +1,13 @@
+import logging
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.db import SessionLocal
 from app.documents.extraction import (
     ExtractionFailed,
     extract_docx_sections,
@@ -15,6 +18,11 @@ from app.documents.validation import PDF, detect_content_type, display_name
 from app.models.document import Document, DocumentPart
 from app.models.user import User
 from app.models.workspace import Workspace
+
+logger = logging.getLogger(__name__)
+
+INTERRUPTED = "Processing was interrupted. Please upload it again."
+UNEXPECTED_FAILURE = "Processing failed unexpectedly. Please upload it again."
 
 
 def upload_document(
@@ -34,20 +42,71 @@ def upload_document(
         filename=display_name(filename)[:255],
         content_type=content_type,
         size_bytes=size,
-        status="pending",
+        # The text is extracted afterwards, by process_document, so the
+        # upload can answer straight away.
+        status="processing",
     )
-    parts = _extract_text(document, path)
     db.add(document)
     try:
-        # flush sends the document row first, so the parts can point at it.
-        db.flush()
-        db.add_all(parts)
         db.commit()
     except BaseException:
         # No database row means nothing points at the file, so remove it.
         path.unlink(missing_ok=True)
         raise
     return document
+
+
+@contextmanager
+def open_session():
+    """A database session of the job's own. Background jobs run after the
+    request's session has been closed, so they cannot borrow it."""
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def process_document(document_id: uuid.UUID) -> None:
+    """Extract a document's text. Runs in the background, after the upload has
+    already answered, so slow work (long PDFs, later OCR) never makes the
+    person wait."""
+    with open_session() as db:
+        document = db.get(Document, document_id)
+        if document is None:
+            return  # deleted before its turn came; nothing to do
+        try:
+            path = document_path(document.workspace_id, document.id)
+            parts = _extract_text(document, path)
+            db.add_all(parts)
+            db.commit()
+        except Exception:
+            # Something unexpected (a bug, or the document was deleted while
+            # being processed). Never leave it stuck on "processing".
+            db.rollback()
+            logger.exception("Processing document %s failed", document_id)
+            _mark_failed(db, document_id, UNEXPECTED_FAILURE)
+
+
+def fail_interrupted_documents(db: Session) -> None:
+    """Run when the server starts. A document still "processing" then was cut
+    off by the server stopping; its job will never finish, so say so."""
+    db.execute(
+        update(Document)
+        .where(Document.status == "processing")
+        .values(status="failed", error=INTERRUPTED)
+    )
+    db.commit()
+
+
+def _mark_failed(db: Session, document_id: uuid.UUID, reason: str) -> None:
+    # An update by id: if the document no longer exists it changes nothing.
+    db.execute(
+        update(Document)
+        .where(Document.id == document_id)
+        .values(status="failed", error=reason)
+    )
+    db.commit()
 
 
 def _extract_text(document: Document, path: Path) -> list[DocumentPart]:

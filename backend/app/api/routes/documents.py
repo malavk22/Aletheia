@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.services.documents import (
     delete_document,
     list_documents,
     list_parts,
+    process_document,
     upload_document,
 )
 
@@ -32,18 +33,23 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/documents")
 @router.post("", response_model=DocumentRead, status_code=201)
 def upload(
     file: UploadFile,
+    background_tasks: BackgroundTasks,
     workspace: Workspace = Depends(get_workspace_for_member),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     try:
-        return upload_document(db, workspace, user, file.filename or "", file.file)
+        document = upload_document(db, workspace, user, file.filename or "", file.file)
     except UnsupportedFileType:
         raise HTTPException(status_code=415, detail="Only PDF and DOCX files are supported")
     except FileTooLarge:
         raise HTTPException(
             status_code=413, detail=f"File is larger than {settings.max_upload_mb} MB"
         )
+    # FastAPI runs this after the response has been sent: the person gets
+    # "processing" straight away while the text is extracted.
+    background_tasks.add_task(process_document, document.id)
+    return document
 
 
 @router.get("", response_model=list[DocumentRead])
