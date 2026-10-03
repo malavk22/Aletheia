@@ -4,10 +4,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
 
-from sqlalchemy import select, update
+from sqlalchemy import exists, select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.documents import embeddings
 from app.documents.chunking import chunk_text
 from app.documents.extraction import (
     ExtractionFailed,
@@ -83,7 +84,9 @@ def process_document(document_id: uuid.UUID) -> None:
             # Parts must be in the database before chunks can point at them;
             # SQLAlchemy does not know that order on its own.
             db.flush()
-            db.add_all(_make_chunks(parts))
+            chunks = _make_chunks(parts)
+            _embed(chunks)
+            db.add_all(chunks)
             db.commit()
         except Exception:
             # Something unexpected (a bug, or the document was deleted while
@@ -169,6 +172,34 @@ def _make_chunks(parts: list[DocumentPart]) -> list[DocumentChunk]:
                 )
             )
     return chunks
+
+
+def _embed(chunks: list[DocumentChunk]) -> None:
+    vectors = embeddings.embed_passages([chunk.text for chunk in chunks])
+    for chunk, vector in zip(chunks, vectors):
+        chunk.embedding = vector
+
+
+def backfill_chunks(db: Session) -> int:
+    """Chunk and embed documents that were processed before chunking and
+    embeddings existed. Returns how many chunks were embedded. Safe to run
+    again: documents that already have everything are left alone."""
+    without_chunks = db.scalars(
+        select(Document).where(
+            Document.status == "ready",
+            ~exists().where(DocumentChunk.document_id == Document.id),
+        )
+    ).all()
+    for document in without_chunks:
+        db.add_all(_make_chunks(list_parts(db, document)))
+    db.flush()
+
+    missing = db.scalars(
+        select(DocumentChunk).where(DocumentChunk.embedding.is_(None))
+    ).all()
+    _embed(list(missing))
+    db.commit()
+    return len(missing)
 
 
 def list_parts(db: Session, document: Document) -> list[DocumentPart]:
