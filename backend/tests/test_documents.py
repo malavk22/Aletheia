@@ -2,11 +2,13 @@ import io
 import uuid
 import zipfile
 
+import pytest
 from docxs import make_docx
-from pdfs import make_pdf
+from pdfs import make_pdf, make_scanned_pdf
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.documents.ocr import ocr_available
 from app.models.document import Document, DocumentPart
 from app.services.documents import fail_interrupted_documents, process_document
 
@@ -78,6 +80,7 @@ def test_upload_pdf_is_stored_and_listed(client, upload_dir):
         "status",
         "error",
         "part_count",
+        "ocr_part_count",
     }
     # The upload answers before the text is extracted.
     assert document["status"] == "processing"
@@ -263,7 +266,7 @@ def test_pdf_without_text_is_kept_but_marked_failed(client, upload_dir):
     # The upload itself succeeds: the file is kept so it can be processed later.
     assert response.status_code == 201
     assert document["status"] == "failed"
-    assert "scanned" in document["error"]
+    assert "No text found" in document["error"]
     assert document["part_count"] is None
     assert client.get(parts_url(workspace_id, document["id"])).json() == []
     assert len(stored_files(upload_dir)) == 1
@@ -443,3 +446,19 @@ def test_interrupted_processing_is_marked_failed(client, db):
 def test_processing_a_document_deleted_in_the_meantime_does_nothing(client):
     # The background job may start after the document was already deleted.
     process_document(uuid.uuid4())  # must not raise
+
+
+@pytest.mark.skipif(not ocr_available(), reason="Tesseract (OCR) is not installed")
+def test_scanned_pdf_is_ready_with_ocr_text(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    scan = make_scanned_pdf("Payment is due within thirty days")
+
+    uploaded = upload(client, workspace_id, "scan.pdf", scan).json()
+    document = processed(client, workspace_id, uploaded["id"])
+    parts = client.get(parts_url(workspace_id, uploaded["id"])).json()
+
+    assert document["status"] == "ready"
+    assert document["part_count"] == 1
+    assert document["ocr_part_count"] == 1
+    assert parts[0]["source"] == "ocr"
+    assert "payment" in parts[0]["text"].lower()

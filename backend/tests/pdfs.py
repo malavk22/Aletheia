@@ -2,6 +2,7 @@
 
 import io
 
+from PIL import Image, ImageDraw, ImageFont
 from pypdf import PdfReader, PdfWriter
 
 
@@ -56,6 +57,30 @@ def make_encrypted_pdf(*page_texts: str) -> bytes:
     writer = PdfWriter()
     writer.append(PdfReader(io.BytesIO(make_pdf(*page_texts))))
     writer.encrypt(user_password="secret", owner_password="secret")
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def make_scanned_pdf(text: str) -> bytes:
+    """A PDF whose only page is a picture of `text`, like a scanned letter:
+    there is no text layer, so the words can only be read with OCR."""
+    image = Image.new("RGB", (2480, 3508), "white")  # an A4 page at 300 dpi
+    try:
+        font = ImageFont.truetype("arial.ttf", 64)
+    except OSError:
+        font = ImageFont.load_default(size=64)
+    ImageDraw.Draw(image).text((200, 300), text, fill="black", font=font)
+    buffer = io.BytesIO()
+    image.save(buffer, "PDF", resolution=300)
+    return buffer.getvalue()
+
+
+def join_pdfs(*pdfs: bytes) -> bytes:
+    """One PDF with the pages of all the given PDFs, in order."""
+    writer = PdfWriter()
+    for pdf in pdfs:
+        writer.append(PdfReader(io.BytesIO(pdf)))
     buffer = io.BytesIO()
     writer.write(buffer)
     return buffer.getvalue()

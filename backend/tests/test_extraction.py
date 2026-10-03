@@ -3,8 +3,10 @@ import zipfile
 
 import pytest
 from docxs import make_docx
-from pdfs import make_encrypted_pdf, make_pdf
+from pdfs import join_pdfs, make_encrypted_pdf, make_pdf, make_scanned_pdf
 
+from app.documents import extraction
+from app.documents.ocr import ocr_available
 from app.documents.extraction import (
     ExtractionFailed,
     clean_text,
@@ -17,12 +19,19 @@ def extract(content: bytes):
     return extract_pdf_pages(io.BytesIO(content))
 
 
+needs_tesseract = pytest.mark.skipif(
+    not ocr_available(), reason="Tesseract (OCR) is not installed on this machine"
+)
+
+
 def test_extracts_text_page_by_page():
     pages = extract(make_pdf("Termination requires notice.", "Payment is due monthly."))
 
     assert len(pages) == 2
-    assert "Termination requires notice." in pages[0]
-    assert "Payment is due monthly." in pages[1]
+    assert "Termination requires notice." in pages[0][0]
+    assert "Payment is due monthly." in pages[1][0]
+    # Taken from the PDF's own text layer, not OCR.
+    assert [source for _, source in pages] == ["text", "text"]
 
 
 def test_keeps_a_blank_page_in_its_place():
@@ -31,15 +40,63 @@ def test_keeps_a_blank_page_in_its_place():
     pages = extract(make_pdf("Cover", "", "Clause 3"))
 
     assert len(pages) == 3
-    assert pages[1].strip() == ""
-    assert "Clause 3" in pages[2]
+    assert pages[1][0].strip() == ""
+    assert "Clause 3" in pages[2][0]
 
 
-def test_pdf_without_any_text_looks_scanned():
+def test_scanned_pdf_without_ocr_says_so(monkeypatch):
+    monkeypatch.setattr(extraction, "ocr_available", lambda: False)
+
+    with pytest.raises(ExtractionFailed) as failure:
+        extract(make_scanned_pdf("Termination requires notice"))
+
+    assert "scanned" in str(failure.value)
+    assert "OCR is not available" in str(failure.value)
+
+
+@needs_tesseract
+def test_scanned_page_is_read_with_ocr():
+    pages = extract(make_scanned_pdf("Termination requires thirty days notice"))
+
+    assert len(pages) == 1
+    text, source = pages[0]
+    assert source == "ocr"
+    # OCR can misread a letter here and there, so check the words, not the
+    # exact string.
+    words = text.lower().split()
+    assert {"termination", "requires", "thirty", "days", "notice"} <= set(words)
+
+
+@needs_tesseract
+def test_only_pages_without_text_go_through_ocr():
+    pdf = join_pdfs(make_pdf("Cover page"), make_scanned_pdf("Signed by both parties"))
+
+    pages = extract(pdf)
+
+    assert [source for _, source in pages] == ["text", "ocr"]
+    assert "Cover page" in pages[0][0]
+    assert "signed" in pages[1][0].lower()
+
+
+@needs_tesseract
+def test_blank_pdf_finds_nothing_even_with_ocr():
     with pytest.raises(ExtractionFailed) as failure:
         extract(make_pdf("", ""))
 
-    assert "scanned" in str(failure.value)
+    assert "even after reading the pages as images" in str(failure.value)
+
+
+def test_ocr_failure_fails_clearly(monkeypatch):
+    def broken_ocr(pdf, index):
+        raise RuntimeError("tesseract crashed")
+
+    monkeypatch.setattr(extraction, "ocr_available", lambda: True)
+    monkeypatch.setattr(extraction, "ocr_pdf_page", broken_ocr)
+
+    with pytest.raises(ExtractionFailed) as failure:
+        extract(make_scanned_pdf("Anything"))
+
+    assert "OCR failed" in str(failure.value)
 
 
 def test_password_protected_pdf_fails_clearly():
