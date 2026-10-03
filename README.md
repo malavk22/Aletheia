@@ -20,9 +20,22 @@ with OCR for scanned pages.
 
 ## Run the backend locally
 
-Requirements: Python 3.11+, PostgreSQL, and Tesseract for reading scanned PDFs
-(OCR). On Windows: `winget install --id UB-Mannheim.TesseractOCR`. Without
-Tesseract everything else works; scanned PDFs are marked as failed.
+Requirements: Python 3.11+, PostgreSQL with the
+[pgvector](https://github.com/pgvector/pgvector) extension, and Tesseract for
+reading scanned PDFs (OCR). On Windows: `winget install --id UB-Mannheim.TesseractOCR`.
+Without Tesseract everything else works; scanned PDFs are marked as failed.
+
+pgvector has no Windows installer; build it once from an administrator
+"x64 Native Tools Command Prompt for VS" (needs Visual Studio's
+"Desktop development with C++"):
+
+```bat
+set "PGROOT=C:\Program Files\PostgreSQL\17"
+git clone --branch v0.8.7 https://github.com/pgvector/pgvector.git
+cd pgvector
+nmake /F Makefile.win
+nmake /F Makefile.win install
+```
 
 ```bash
 cd backend
