@@ -1,7 +1,14 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -64,4 +71,32 @@ class DocumentPart(Base):
     source: Mapped[str] = mapped_column(String(10), server_default="text")
     # The text as extracted (only null characters removed). Empty if the part
     # had no text (for example a blank PDF page).
+    text: Mapped[str] = mapped_column(Text)
+
+
+class DocumentChunk(Base):
+    """A small piece of one part's text: the unit that search finds.
+
+    A chunk never spans two parts, so it always has exactly one location: the
+    page or section of its part. That is what a search result (and later a
+    citation) points at.
+    """
+
+    __tablename__ = "document_chunks"
+    # The chunk's part, found by (document, part position). Deleting the part
+    # (or its document) deletes its chunks.
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["document_id", "part_position"],
+            ["document_parts.document_id", "document_parts.position"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    # Reading order within the whole document, from 1.
+    position: Mapped[int] = mapped_column(primary_key=True)
+    # Which part (page or section) the chunk was cut from.
+    part_position: Mapped[int]
+    # Whitespace tidied to single spaces; otherwise the part's own words.
     text: Mapped[str] = mapped_column(Text)
