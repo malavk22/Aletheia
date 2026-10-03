@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.documents.chunking import chunk_text
 from app.documents.extraction import (
     ExtractionFailed,
     extract_docx_sections,
@@ -15,7 +16,7 @@ from app.documents.extraction import (
 )
 from app.documents.storage import document_path, save_file
 from app.documents.validation import PDF, detect_content_type, display_name
-from app.models.document import Document, DocumentPart
+from app.models.document import Document, DocumentChunk, DocumentPart
 from app.models.user import User
 from app.models.workspace import Workspace
 
@@ -79,6 +80,10 @@ def process_document(document_id: uuid.UUID) -> None:
             path = document_path(document.workspace_id, document.id)
             parts = _extract_text(document, path)
             db.add_all(parts)
+            # Parts must be in the database before chunks can point at them;
+            # SQLAlchemy does not know that order on its own.
+            db.flush()
+            db.add_all(_make_chunks(parts))
             db.commit()
         except Exception:
             # Something unexpected (a bug, or the document was deleted while
@@ -147,6 +152,23 @@ def _extract_text(document: Document, path: Path) -> list[DocumentPart]:
     document.part_count = len(parts)
     document.ocr_part_count = sum(1 for part in parts if part.source == "ocr")
     return parts
+
+
+def _make_chunks(parts: list[DocumentPart]) -> list[DocumentChunk]:
+    """Cut each part into chunks, numbered in reading order across the whole
+    document. Chunks are cut per part, so none spans two pages or sections."""
+    chunks: list[DocumentChunk] = []
+    for part in parts:
+        for text in chunk_text(part.text):
+            chunks.append(
+                DocumentChunk(
+                    document_id=part.document_id,
+                    position=len(chunks) + 1,
+                    part_position=part.position,
+                    text=text,
+                )
+            )
+    return chunks
 
 
 def list_parts(db: Session, document: Document) -> list[DocumentPart]:
