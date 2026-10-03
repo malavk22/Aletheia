@@ -14,6 +14,9 @@ dist/
 # Uploaded files (later versions)
 uploads/
 
+# Downloaded AI models
+backend/models/
+
 # Local-only docs (not pushed)
 docs/
 prompt.txt
