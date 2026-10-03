@@ -10,7 +10,11 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.documents.ocr import ocr_available
 from app.models.document import Document, DocumentChunk, DocumentPart
-from app.services.documents import fail_interrupted_documents, process_document
+from app.services.documents import (
+    backfill_chunks,
+    fail_interrupted_documents,
+    process_document,
+)
 
 PDF_TYPE = "application/pdf"
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -526,3 +530,34 @@ def test_chunks_are_deleted_with_their_document(client, db):
     client.delete(document_url(workspace_id, document_id))
 
     assert chunks_of(db, document_id) == []
+
+
+def test_every_chunk_is_embedded(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    long_page = " ".join(f"Clause {n} sets out the rent terms." for n in range(1, 61))
+
+    content = make_pdf("Clause one.", long_page)
+    document_id = upload(client, workspace_id, "lease.pdf", content).json()["id"]
+    chunks = chunks_of(db, document_id)
+
+    assert len(chunks) > 2
+    assert all(len(chunk.embedding) == 384 for chunk in chunks)
+
+
+def test_backfill_chunks_and_embeds_older_documents(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    first = upload(client, workspace_id, "a.pdf", make_pdf("Clause one.")).json()["id"]
+    second = upload(client, workspace_id, "b.pdf", make_pdf("Clause two.")).json()["id"]
+    # Make them look like documents processed before V0.3: the first has no
+    # chunks at all, the second has a chunk without an embedding.
+    for chunk in chunks_of(db, first):
+        db.delete(chunk)
+    chunks_of(db, second)[0].embedding = None
+    db.commit()
+
+    assert backfill_chunks(db) == 2
+
+    assert [c.text for c in chunks_of(db, first)] == ["Clause one."]
+    assert all(c.embedding is not None for c in chunks_of(db, first) + chunks_of(db, second))
+    # A second run finds nothing left to do.
+    assert backfill_chunks(db) == 0
