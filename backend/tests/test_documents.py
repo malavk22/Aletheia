@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.documents.ocr import ocr_available
-from app.models.document import Document, DocumentPart
+from app.models.document import Document, DocumentChunk, DocumentPart
 from app.services.documents import fail_interrupted_documents, process_document
 
 PDF_TYPE = "application/pdf"
@@ -462,3 +462,67 @@ def test_scanned_pdf_is_ready_with_ocr_text(client):
     assert document["ocr_part_count"] == 1
     assert parts[0]["source"] == "ocr"
     assert "payment" in parts[0]["text"].lower()
+
+
+def chunks_of(db, document_id):
+    return db.scalars(
+        select(DocumentChunk)
+        .where(DocumentChunk.document_id == uuid.UUID(document_id))
+        .order_by(DocumentChunk.position)
+    ).all()
+
+
+def test_processing_cuts_each_page_into_chunks(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    long_page = " ".join(f"Clause {n} sets out the rent terms." for n in range(1, 61))
+
+    content = make_pdf("Clause one.", long_page)
+    document_id = upload(client, workspace_id, "lease.pdf", content).json()["id"]
+    chunks = chunks_of(db, document_id)
+
+    # Page 1 is one short chunk; the long page 2 is cut into several, all
+    # pointing at page 2, numbered on from page 1.
+    assert (chunks[0].position, chunks[0].part_position, chunks[0].text) == (
+        1,
+        1,
+        "Clause one.",
+    )
+    assert len(chunks) > 2
+    assert [chunk.position for chunk in chunks] == list(range(1, len(chunks) + 1))
+    assert {chunk.part_position for chunk in chunks[1:]} == {2}
+    assert "Clause 60 sets out the rent terms." in chunks[-1].text
+
+
+def test_docx_sections_are_chunked_separately(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_docx(
+        ("heading", "Revenue"),
+        ("p", "Revenue grew 12%."),
+        ("heading", "Risks"),
+        ("p", "Supplier costs are rising."),
+    )
+
+    document_id = upload(client, workspace_id, "report.docx", content).json()["id"]
+
+    assert [(c.part_position, c.text) for c in chunks_of(db, document_id)] == [
+        (1, "Revenue grew 12%."),
+        (2, "Supplier costs are rising."),
+    ]
+
+
+def test_failed_document_has_no_chunks(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+
+    document_id = upload(client, workspace_id, "blank.pdf", make_pdf("")).json()["id"]
+
+    assert chunks_of(db, document_id) == []
+
+
+def test_chunks_are_deleted_with_their_document(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()["id"]
+    assert len(chunks_of(db, document_id)) == 1
+
+    client.delete(document_url(workspace_id, document_id))
+
+    assert chunks_of(db, document_id) == []
