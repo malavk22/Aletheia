@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     # Full path to tesseract.exe, only needed if it is somewhere unusual. When
     # empty, it is looked for on the PATH and in its default Windows folder.
     tesseract_cmd: str | None = None
+    # Where the embedding model is downloaded to on first use (about 67 MB).
+    embedding_cache_dir: str = "models"
 
 
 settings = Settings()
