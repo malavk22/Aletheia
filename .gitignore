@@ -17,6 +17,7 @@ uploads/
 # Local-only docs (not pushed)
 docs/
 prompt.txt
+/20??-??-??-*.txt
 
 # Editor / OS
 .vscode/
