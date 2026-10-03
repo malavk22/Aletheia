@@ -7,8 +7,9 @@ export type WorkspaceDocument = {
   filename: string
   content_type: string
   size_bytes: number
-  // pending: not processed yet; ready: text extracted; failed: see `error`.
-  status: 'pending' | 'ready' | 'failed'
+  // processing: text being extracted in the background; ready: done;
+  // failed: see `error`. (pending: older uploads that were never processed.)
+  status: 'pending' | 'processing' | 'ready' | 'failed'
   error: string | null
   // How many parts the text was stored in: pages for a PDF, sections for a DOCX.
   part_count: number | null

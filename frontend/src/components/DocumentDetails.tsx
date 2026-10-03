@@ -43,5 +43,8 @@ function DocumentStatus({ document }: { document: WorkspaceDocument }) {
   if (document.status === 'failed') {
     return <p className="mt-0.5 text-sm text-danger">Text not extracted: {document.error}</p>
   }
+  if (document.status === 'processing') {
+    return <p className="mt-0.5 text-sm text-ink-muted">Processing… extracting text</p>
+  }
   return <p className="mt-0.5 text-sm text-ink-muted">Waiting for text extraction</p>
 }

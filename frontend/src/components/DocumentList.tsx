@@ -18,7 +18,14 @@ export function DocumentList({ workspaceId }: { workspaceId: string }) {
     isPending,
     isError,
     refetch,
-  } = useQuery({ queryKey: documentsKey(workspaceId), queryFn: () => listDocuments(workspaceId) })
+  } = useQuery({
+    queryKey: documentsKey(workspaceId),
+    queryFn: () => listDocuments(workspaceId),
+    // Text is extracted in the background after an upload. While any document
+    // is still processing, ask again every 2 seconds; stop once all are done.
+    refetchInterval: (query) =>
+      query.state.data?.some((document) => document.status === 'processing') ? 2000 : false,
+  })
 
   if (isPending) return <p className="text-sm text-ink-muted">Loading documents…</p>
 
