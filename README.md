@@ -49,9 +49,14 @@ your database password. (If the password contains `@`, write it as `%40`.)
 
 ```bash
 alembic upgrade head            # create the database tables
+python -m app.backfill          # once, after upgrading to V0.3: chunk and embed older documents
 uvicorn app.main:app --reload   # http://localhost:8000/api/v1/health
 pytest                          # run tests
 ```
+
+The first document processed downloads the embedding model
+(`BAAI/bge-small-en-v1.5`, about 67 MB) into `backend/models/`. It runs on
+the CPU; documents are never sent to an outside service.
 
 Tests run in their own database, `aletheia_test`, which is created
 automatically on the first run. They never touch the `aletheia` database.
