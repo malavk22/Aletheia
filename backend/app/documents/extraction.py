@@ -1,8 +1,12 @@
+import io
 from typing import BinaryIO
 
 import docx
+import pypdfium2 as pdfium
 from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
+
+from app.documents.ocr import ocr_available, ocr_pdf_page
 
 # Word's built-in heading styles: what it applies when someone uses its
 # heading buttons.
@@ -20,33 +24,70 @@ def clean_text(text: str) -> str:
     return text.replace("\x00", "")
 
 
-def extract_pdf_pages(file: BinaryIO) -> list[str]:
-    """Return the text of each page, in order (index 0 is page 1).
+def extract_pdf_pages(file: BinaryIO) -> list[tuple[str, str]]:
+    """Return (text, source) for each page, in order (index 0 is page 1).
 
-    A page with no text is kept as an empty string, so page numbers always
-    match the file. Raises ExtractionFailed with a reason people can read.
+    source is "text" when the text came from the PDF's own text layer (exact),
+    or "ocr" when the page had none and its text was read from a picture of it
+    (can contain misread words). A page with no text either way is kept as an
+    empty string, so page numbers always match the file.
+    Raises ExtractionFailed with a reason people can read.
     """
+    data = file.read()
     try:
-        reader = PdfReader(file)
+        reader = PdfReader(io.BytesIO(data))
         # Some PDFs are "encrypted" only to restrict printing or copying and
         # open with an empty password; only a real password stops us.
         if reader.is_encrypted and not reader.decrypt(""):
             raise ExtractionFailed("This PDF is password-protected.")
-        pages = [clean_text(page.extract_text() or "") for page in reader.pages]
+        texts = [clean_text(page.extract_text() or "") for page in reader.pages]
     except ExtractionFailed:
         raise
     except Exception as error:
         # A damaged PDF can make pypdf fail in many different ways; they all
         # mean the same thing to the person who uploaded it.
-        raise ExtractionFailed("This PDF could not be read. It may be damaged.") from error
+        raise ExtractionFailed(
+            "This PDF could not be read. It may be damaged."
+        ) from error
 
-    if not pages:
+    if not texts:
         raise ExtractionFailed("This PDF has no pages.")
-    if not any(text.strip() for text in pages):
-        # A scanned PDF is a picture of text: there are pages, but nothing to
-        # extract. Reading those needs OCR (a later step).
-        raise ExtractionFailed("No text found. This looks like a scanned document.")
+
+    pages = [(text, "text") for text in texts]
+    # A scanned page is a picture of text: it has no text layer to extract.
+    # Only those pages go through OCR; a page with a text layer is exact as it
+    # is, and OCR could only make it worse.
+    empty = [index for index, text in enumerate(texts) if not text.strip()]
+    if empty and ocr_available():
+        _read_pages_with_ocr(data, pages, empty)
+
+    if not any(text.strip() for text, _ in pages):
+        if ocr_available():
+            raise ExtractionFailed(
+                "No text found, even after reading the pages as images."
+            )
+        raise ExtractionFailed(
+            "No text found. This looks like a scanned document, "
+            "and OCR is not available on this server."
+        )
     return pages
+
+
+def _read_pages_with_ocr(data: bytes, pages: list[tuple[str, str]], indexes: list[int]):
+    """Fill in pages[index] with OCR text, for each page index given."""
+    try:
+        pdf = pdfium.PdfDocument(data)
+        try:
+            for index in indexes:
+                text = clean_text(ocr_pdf_page(pdf, index))
+                if text.strip():
+                    pages[index] = (text, "ocr")
+        finally:
+            pdf.close()
+    except Exception as error:
+        raise ExtractionFailed(
+            "The scanned pages could not be read. OCR failed on this file."
+        ) from error
 
 
 def extract_docx_sections(file: BinaryIO) -> list[tuple[str | None, str]]:

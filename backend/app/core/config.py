@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     # Where uploaded files are stored (relative to the backend folder).
     upload_dir: str = "uploads"
     max_upload_mb: int = 20
+    # Full path to tesseract.exe, only needed if it is somewhere unusual. When
+    # empty, it is looked for on the PATH and in its default Windows folder.
+    tesseract_cmd: str | None = None
 
 
 settings = Settings()

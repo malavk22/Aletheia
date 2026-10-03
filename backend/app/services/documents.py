@@ -120,12 +120,18 @@ def _extract_text(document: Document, path: Path) -> list[DocumentPart]:
         with path.open("rb") as stored:
             if document.content_type == PDF:
                 parts = [
-                    DocumentPart(position=number, page_number=number, text=text)
-                    for number, text in enumerate(extract_pdf_pages(stored), start=1)
+                    DocumentPart(
+                        position=number, page_number=number, text=text, source=source
+                    )
+                    for number, (text, source) in enumerate(
+                        extract_pdf_pages(stored), start=1
+                    )
                 ]
             else:
                 parts = [
-                    DocumentPart(position=number, heading=heading, text=text)
+                    DocumentPart(
+                        position=number, heading=heading, text=text, source="text"
+                    )
                     for number, (heading, text) in enumerate(
                         extract_docx_sections(stored), start=1
                     )
@@ -139,6 +145,7 @@ def _extract_text(document: Document, path: Path) -> list[DocumentPart]:
         part.document_id = document.id
     document.status = "ready"
     document.part_count = len(parts)
+    document.ocr_part_count = sum(1 for part in parts if part.source == "ocr")
     return parts
 
 
