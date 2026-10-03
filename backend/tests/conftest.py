@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ settings.database_url = dev_url.set(database=TEST_DATABASE).render_as_string(
 
 from app.core.db import engine, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.services import documents as documents_service  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -68,7 +70,11 @@ def db():
 
 
 @pytest.fixture
-def client(db):
+def client(db, monkeypatch):
     app.dependency_overrides[get_db] = lambda: db
+    # Background jobs open their own session in real use. In tests they must
+    # use the test's session, or they could not see rows the test created
+    # (those are never committed for real) and would leave data behind.
+    monkeypatch.setattr(documents_service, "open_session", lambda: nullcontext(db))
     yield TestClient(app)
     app.dependency_overrides.clear()

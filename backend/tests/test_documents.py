@@ -7,7 +7,8 @@ from pdfs import make_pdf
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.models.document import DocumentPart
+from app.models.document import Document, DocumentPart
+from app.services.documents import fail_interrupted_documents, process_document
 
 PDF_TYPE = "application/pdf"
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -44,6 +45,15 @@ def upload(client, workspace_id, filename, content):
     return client.post(documents_url(workspace_id), files={"file": (filename, content)})
 
 
+def processed(client, workspace_id, document_id):
+    """The document as it is after background processing.
+
+    The upload answers first and processes afterwards; in tests the background
+    job has finished by the time the upload call returns, so reading the
+    document again shows the final status."""
+    return client.get(document_url(workspace_id, document_id)).json()
+
+
 def stored_files(upload_dir):
     return [path for path in upload_dir.rglob("*") if path.is_file()]
 
@@ -69,7 +79,9 @@ def test_upload_pdf_is_stored_and_listed(client, upload_dir):
         "error",
         "part_count",
     }
-    assert listed.json() == [document]
+    # The upload answers before the text is extracted.
+    assert document["status"] == "processing"
+    assert [listed_document["id"] for listed_document in listed.json()] == [document["id"]]
     # Stored under the document's id, inside its workspace's folder.
     stored = upload_dir / workspace_id / document["id"]
     assert stored.read_bytes() == PDF_BYTES
@@ -227,9 +239,10 @@ def parts_url(workspace_id, document_id):
 def test_text_pdf_is_ready_with_its_pages(client):
     workspace_id = workspace_for(client, "ada@example.com")
 
-    document = upload(
+    uploaded = upload(
         client, workspace_id, "lease.pdf", make_pdf("Clause one.", "Clause two.")
     ).json()
+    document = processed(client, workspace_id, uploaded["id"])
     pages = client.get(parts_url(workspace_id, document["id"])).json()
 
     assert document["status"] == "ready"
@@ -245,7 +258,7 @@ def test_pdf_without_text_is_kept_but_marked_failed(client, upload_dir):
     workspace_id = workspace_for(client, "ada@example.com")
 
     response = upload(client, workspace_id, "scan.pdf", make_pdf("", ""))
-    document = response.json()
+    document = processed(client, workspace_id, response.json()["id"])
 
     # The upload itself succeeds: the file is kept so it can be processed later.
     assert response.status_code == 201
@@ -266,7 +279,8 @@ def test_docx_is_ready_with_its_sections(client):
         ("p", "Supplier costs are rising."),
     )
 
-    document = upload(client, workspace_id, "report.docx", content).json()
+    uploaded = upload(client, workspace_id, "report.docx", content).json()
+    document = processed(client, workspace_id, uploaded["id"])
     sections = client.get(parts_url(workspace_id, document["id"])).json()
 
     assert document["status"] == "ready"
@@ -284,7 +298,7 @@ def test_docx_without_text_is_kept_but_marked_failed(client, upload_dir):
     workspace_id = workspace_for(client, "ada@example.com")
 
     response = upload(client, workspace_id, "blank.docx", make_docx())
-    document = response.json()
+    document = processed(client, workspace_id, response.json()["id"])
 
     assert response.status_code == 201
     assert document["status"] == "failed"
@@ -326,7 +340,8 @@ def test_get_one_document(client):
     response = client.get(document_url(workspace_id, uploaded["id"]))
 
     assert response.status_code == 200
-    assert response.json() == uploaded
+    assert response.json()["id"] == uploaded["id"]
+    assert response.json()["filename"] == "lease.pdf"
 
 
 def test_original_pdf_opens_in_the_browser(client):
@@ -393,3 +408,38 @@ def test_document_and_file_require_login(client):
 
     assert client.get(document_url(workspace_id, document_id)).status_code == 401
     assert client.get(file_url(workspace_id, document_id)).status_code == 401
+
+
+def test_upload_answers_first_and_processes_in_the_background(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+
+    uploaded = upload(client, workspace_id, "lease.pdf", PDF_BYTES).json()
+
+    # The answer comes before the text is extracted...
+    assert uploaded["status"] == "processing"
+    assert uploaded["part_count"] is None
+    # ...and the background job finishes the work afterwards.
+    document = processed(client, workspace_id, uploaded["id"])
+    assert document["status"] == "ready"
+    assert document["part_count"] == 1
+
+
+def test_interrupted_processing_is_marked_failed(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    stuck_id = upload(client, workspace_id, "stuck.pdf", PDF_BYTES).json()["id"]
+    done_id = upload(client, workspace_id, "done.pdf", PDF_BYTES).json()["id"]
+    # Pretend the server stopped while "stuck.pdf" was being processed.
+    db.get(Document, uuid.UUID(stuck_id)).status = "processing"
+    db.commit()
+
+    fail_interrupted_documents(db)
+
+    stuck = processed(client, workspace_id, stuck_id)
+    assert stuck["status"] == "failed"
+    assert "interrupted" in stuck["error"]
+    assert processed(client, workspace_id, done_id)["status"] == "ready"
+
+
+def test_processing_a_document_deleted_in_the_meantime_does_nothing(client):
+    # The background job may start after the document was already deleted.
+    process_document(uuid.uuid4())  # must not raise
