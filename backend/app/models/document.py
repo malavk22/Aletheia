@@ -9,9 +9,11 @@ from sqlalchemy import (
     Text,
     func,
 )
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
+from app.documents.embeddings import DIMENSIONS
 
 
 class Document(Base):
@@ -100,3 +102,7 @@ class DocumentChunk(Base):
     part_position: Mapped[int]
     # Whitespace tidied to single spaces; otherwise the part's own words.
     text: Mapped[str] = mapped_column(Text)
+    # The chunk's meaning as numbers: chunks about similar things have
+    # vectors that point in similar directions. Empty only for chunks made
+    # before embeddings existed, until the backfill fills them in.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(DIMENSIONS))
