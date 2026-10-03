@@ -31,6 +31,8 @@ class Document(Base):
     error: Mapped[str | None] = mapped_column(String(255))
     # How many parts were stored: pages for a PDF, sections for a DOCX.
     part_count: Mapped[int | None]
+    # How many of those parts were read by OCR (scanned pages).
+    ocr_part_count: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -57,6 +59,9 @@ class DocumentPart(Base):
     page_number: Mapped[int | None]
     # DOCX only: the heading this text sits under.
     heading: Mapped[str | None] = mapped_column(Text)
+    # How the text was obtained: "text" = taken from the file itself (exact);
+    # "ocr" = read from a picture of the page (can contain misread words).
+    source: Mapped[str] = mapped_column(String(10), server_default="text")
     # The text as extracted (only null characters removed). Empty if the part
     # had no text (for example a blank PDF page).
     text: Mapped[str] = mapped_column(Text)
