@@ -34,9 +34,12 @@ function DocumentStatus({ document }: { document: WorkspaceDocument }) {
     // stored section by section (split at its headings).
     const unit = document.content_type === 'application/pdf' ? 'page' : 'section'
     const count = document.part_count ?? 0
+    // OCR text can contain misread words, so say how much of it there is.
+    const ocr = document.ocr_part_count ?? 0
     return (
       <p className="mt-0.5 text-sm text-ink-muted">
         Text extracted · {count} {count === 1 ? unit : `${unit}s`}
+        {ocr > 0 && ` (${ocr === count ? 'all' : ocr} read by OCR)`}
       </p>
     )
   }
