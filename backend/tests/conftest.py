@@ -1,3 +1,5 @@
+import re
+import zlib
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -21,6 +23,7 @@ settings.database_url = dev_url.set(database=TEST_DATABASE).render_as_string(
 )
 
 from app.core.db import engine, get_db  # noqa: E402
+from app.documents import embeddings  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services import documents as documents_service  # noqa: E402
 
@@ -53,6 +56,25 @@ def upload_dir(tmp_path, monkeypatch):
     # ever write into the real uploads folder.
     monkeypatch.setattr(settings, "upload_dir", str(tmp_path))
     return tmp_path
+
+
+def fake_vector(text: str) -> list[float]:
+    """Stands in for the embedding model in tests: fast, and nothing to
+    download. Each word adds 1 to a slot picked by a stable hash of the word,
+    so texts that share words point in similar directions. (It knows nothing
+    about meaning; tests/test_embeddings.py tests the real model.)"""
+    vector = [0.0] * embeddings.DIMENSIONS
+    for word in re.findall(r"\w+", text.lower()):
+        vector[zlib.crc32(word.encode()) % embeddings.DIMENSIONS] += 1.0
+    return vector
+
+
+@pytest.fixture(autouse=True)
+def fake_embeddings(monkeypatch):
+    monkeypatch.setattr(
+        embeddings, "embed_passages", lambda texts: [fake_vector(t) for t in texts]
+    )
+    monkeypatch.setattr(embeddings, "embed_query", fake_vector)
 
 
 @pytest.fixture
