@@ -1,8 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { UNREACHABLE_MESSAGE } from '../api/client.ts'
-import { deleteDocument, documentsKey, listDocuments } from '../api/documents.ts'
+import {
+  deleteDocument,
+  documentFileUrl,
+  documentsKey,
+  listDocuments,
+} from '../api/documents.ts'
 import type { WorkspaceDocument } from '../api/documents.ts'
 import { Button } from './Button.tsx'
 import { DocumentDetails } from './DocumentDetails.tsx'
@@ -63,15 +67,21 @@ function DocumentRow({
   const textButton =
     'rounded-sm px-2 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-accent'
 
+  const isPdf = document.content_type === 'application/pdf'
+
   return (
     <li className="flex items-center justify-between gap-4 py-3">
       <div className="min-w-0">
-        <Link
-          to={`/workspaces/${workspaceId}/documents/${document.id}`}
+        {/* Opens the original file: a PDF in a new tab, a Word file downloads
+            (the backend tells the browser which). */}
+        <a
+          href={documentFileUrl(workspaceId, document.id)}
+          target={isPdf ? '_blank' : undefined}
+          rel={isPdf ? 'noopener' : undefined}
           className="block truncate text-sm font-medium hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
         >
           {document.filename}
-        </Link>
+        </a>
         <DocumentDetails document={document} />
         {mutation.isError && <p className="mt-0.5 text-sm text-danger">{UNREACHABLE_MESSAGE}</p>}
       </div>
