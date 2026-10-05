@@ -2,14 +2,17 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Computed,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     String,
     Text,
     func,
 )
 from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -93,6 +96,8 @@ class DocumentChunk(Base):
             ["document_parts.document_id", "document_parts.position"],
             ondelete="CASCADE",
         ),
+        # Lets keyword search find matching chunks without reading every one.
+        Index("ix_document_chunks_search_words", "search_words", postgresql_using="gin"),
     )
 
     document_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
@@ -106,3 +111,9 @@ class DocumentChunk(Base):
     # vectors that point in similar directions. Empty only for chunks made
     # before embeddings existed, until the backfill fills them in.
     embedding: Mapped[list[float] | None] = mapped_column(Vector(DIMENSIONS))
+    # The chunk's words for keyword search, reduced to their stems ("terminated"
+    # and "termination" both become "termin") with common words like "the"
+    # left out. PostgreSQL fills this in itself whenever `text` is written.
+    search_words: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('english', text)", persisted=True)
+    )
