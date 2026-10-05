@@ -14,5 +14,7 @@ class SearchResult(BaseModel):
     # "text" (taken from the file, exact) or "ocr" (read from an image).
     source: str
     text: str
-    # How close in meaning to the question: higher is closer (at most 1).
+    # Higher is a better match. Semantic: closeness in meaning (at most 1).
+    # Keyword: how often and how close together the words appear. The two
+    # are on different scales and should not be compared.
     score: float

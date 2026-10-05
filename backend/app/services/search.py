@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.documents import embeddings
@@ -16,6 +16,44 @@ def semantic_search(db: Session, workspace: Workspace, query: str, limit: int):
     """
     vector = embeddings.embed_query(query)
     distance = DocumentChunk.embedding.cosine_distance(vector)
+    return _search(
+        db,
+        workspace,
+        score=1 - distance,
+        match=DocumentChunk.embedding.is_not(None),
+        limit=limit,
+    )
+
+
+def keyword_search(db: Session, workspace: Workspace, query: str, limit: int):
+    """The chunks in this workspace that contain the words of `query`, best
+    match first.
+
+    Words are compared by their stems, so "terminate" also finds "terminated"
+    and "termination". The query understands web-search style: "quoted
+    phrase", or, -excluded. The score is PostgreSQL's text rank: higher means
+    the words appear more often and closer together. It is not on the same
+    scale as the semantic score.
+    """
+    words = func.websearch_to_tsquery("english", query)
+    return _search(
+        db,
+        workspace,
+        score=func.ts_rank_cd(DocumentChunk.search_words, words),
+        match=DocumentChunk.search_words.bool_op("@@")(words),
+        limit=limit,
+    )
+
+
+def _search(
+    db: Session,
+    workspace: Workspace,
+    score: ColumnElement[float],
+    match: ColumnElement[bool],
+    limit: int,
+):
+    """Chunks of this workspace that pass `match`, highest `score` first,
+    each with its document and location."""
     rows = db.execute(
         select(
             DocumentChunk,
@@ -23,7 +61,7 @@ def semantic_search(db: Session, workspace: Workspace, query: str, limit: int):
             DocumentPart.page_number,
             DocumentPart.heading,
             DocumentPart.source,
-            distance.label("distance"),
+            score.label("score"),
         )
         .join(Document, Document.id == DocumentChunk.document_id)
         .join(
@@ -33,11 +71,8 @@ def semantic_search(db: Session, workspace: Workspace, query: str, limit: int):
         )
         # Only this workspace's documents, filtered inside the query itself,
         # so other workspaces' text is never even read.
-        .where(
-            Document.workspace_id == workspace.id,
-            DocumentChunk.embedding.is_not(None),
-        )
-        .order_by(distance)
+        .where(Document.workspace_id == workspace.id, match)
+        .order_by(score.desc())
         .limit(limit)
     ).all()
     return [
@@ -49,7 +84,7 @@ def semantic_search(db: Session, workspace: Workspace, query: str, limit: int):
             "heading": heading,
             "source": source,
             "text": chunk.text,
-            "score": round(1 - distance, 3),
+            "score": round(score, 3),
         }
-        for chunk, filename, page_number, heading, source, distance in rows
+        for chunk, filename, page_number, heading, source, score in rows
     ]
