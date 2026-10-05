@@ -102,3 +102,89 @@ def test_search_requires_login(client):
     client.post("/api/v1/auth/logout")
 
     assert search(client, workspace_id, "rent").status_code == 401
+
+
+def keyword(client, workspace_id, q, **params):
+    return search(client, workspace_id, q, mode="keyword", **params)
+
+
+def test_keyword_search_returns_only_chunks_with_the_words(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_pdf("The deposit is 1000.", "The rent is 500.", "Pets are allowed.")
+    upload(client, workspace_id, "lease.pdf", content)
+
+    results = keyword(client, workspace_id, "deposit").json()
+
+    assert [(r["page_number"], r["text"]) for r in results] == [(1, "The deposit is 1000.")]
+
+
+def test_keyword_search_matches_other_forms_of_a_word(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    upload(client, workspace_id, "lease.pdf", make_pdf("The lease was terminated early."))
+
+    results = keyword(client, workspace_id, "termination").json()
+
+    assert len(results) == 1
+
+
+def test_keyword_search_finds_exact_codes(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_pdf("Invoice INV-20391 is overdue.", "Invoice INV-55555 is paid.")
+    upload(client, workspace_id, "invoices.pdf", content)
+
+    results = keyword(client, workspace_id, "INV-20391").json()
+
+    assert [r["page_number"] for r in results] == [1]
+
+
+def test_keyword_search_understands_phrases_and_exclusions(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_pdf(
+        "A late fee applies after 5 days.",
+        "The fee is never late.",
+        "A late fee applies to pets too.",
+    )
+    upload(client, workspace_id, "lease.pdf", content)
+
+    phrase = keyword(client, workspace_id, '"late fee"').json()
+    excluded = keyword(client, workspace_id, '"late fee" -pets').json()
+
+    assert sorted(r["page_number"] for r in phrase) == [1, 3]
+    assert [r["page_number"] for r in excluded] == [1]
+
+
+def test_keyword_search_ranks_more_mentions_higher(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_pdf(
+        "Rent is due monthly.", "Rent is due monthly. Late rent costs extra rent."
+    )
+    upload(client, workspace_id, "lease.pdf", content)
+
+    results = keyword(client, workspace_id, "rent").json()
+
+    assert [r["page_number"] for r in results] == [2, 1]
+    assert results[0]["score"] > results[1]["score"]
+
+
+def test_keyword_search_with_only_common_words_finds_nothing(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    upload(client, workspace_id, "lease.pdf", make_pdf("The rent is due."))
+
+    assert keyword(client, workspace_id, "the is").json() == []
+
+
+def test_keyword_search_only_finds_documents_in_that_workspace(client):
+    bob_workspace = workspace_for(client, "bob@example.com")
+    upload(client, bob_workspace, "bob.pdf", make_pdf("Bob's rent is secret."))
+    ada_workspace = workspace_for(client, "ada@example.com")  # now signed in as Ada
+    upload(client, ada_workspace, "ada.pdf", make_pdf("Ada pays the rent."))
+
+    results = keyword(client, ada_workspace, "rent").json()
+
+    assert [result["filename"] for result in results] == ["ada.pdf"]
+
+
+def test_unknown_search_mode_is_rejected(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+
+    assert search(client, workspace_id, "rent", mode="magic").status_code == 422
