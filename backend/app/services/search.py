@@ -80,6 +80,7 @@ def _search(
             "document_id": chunk.document_id,
             "filename": filename,
             "chunk_position": chunk.position,
+            "part_position": chunk.part_position,
             "page_number": page_number,
             "heading": heading,
             "source": source,

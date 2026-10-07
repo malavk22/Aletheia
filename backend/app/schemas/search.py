@@ -8,6 +8,8 @@ class SearchResult(BaseModel):
     filename: str
     # Which chunk of the document (reading order, from 1).
     chunk_position: int
+    # Which page or section of the document (reading order, from 1).
+    part_position: int
     # Where the text is: a page number (PDF) or the heading above it (DOCX).
     page_number: int | None
     heading: str | None
