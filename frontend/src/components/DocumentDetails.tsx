@@ -47,7 +47,8 @@ function DocumentStatus({ document }: { document: WorkspaceDocument }) {
     return <p className="mt-0.5 text-sm text-danger">Text not extracted: {document.error}</p>
   }
   if (document.status === 'processing') {
-    return <p className="mt-0.5 text-sm text-ink-muted">Processing… extracting text</p>
+    // Extracting text, then cutting it into chunks and embedding them.
+    return <p className="mt-0.5 text-sm text-ink-muted">Processing…</p>
   }
   return <p className="mt-0.5 text-sm text-ink-muted">Waiting for text extraction</p>
 }
