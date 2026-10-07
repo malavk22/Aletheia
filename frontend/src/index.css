@@ -19,6 +19,8 @@
   --color-accent-hover: #172c49;
   --color-danger: #9b2c1f;
   --color-danger-soft: #fbedea;
+  /* Marks the words that matched a search, like a highlighter pen. */
+  --color-highlight: #f3e2ad;
 
   /* "both" keeps an element transparent before its turn and visible afterwards. */
   --animate-fade-in: fade-in 1s ease-in-out both;
