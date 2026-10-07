@@ -32,6 +32,7 @@ def test_closest_chunk_comes_first_with_its_document_and_page(client):
     assert best["document_id"] == document_id
     assert best["filename"] == "lease.pdf"
     assert best["page_number"] == 2
+    assert best["part_position"] == 2
     assert best["source"] == "text"
     assert "terminate the lease" in best["text"]
     assert best["score"] > results[1]["score"]
