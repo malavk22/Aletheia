@@ -12,8 +12,9 @@ def _escape(text: str) -> str:
 
 
 def make_pdf(*page_texts: str) -> bytes:
-    """One page per argument. An empty string makes a page with no text,
-    which is what a scanned page looks like to a text extractor."""
+    """One page per argument; "\\n" starts a new line on the page. An empty
+    string makes a page with no text, which is what a scanned page looks like
+    to a text extractor."""
     page_ids = [4 + 2 * index for index in range(len(page_texts))]
     objects = {
         1: b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -25,7 +26,9 @@ def make_pdf(*page_texts: str) -> bytes:
     }
     for page_id, text in zip(page_ids, page_texts):
         content_id = page_id + 1
-        stream = f"BT /F1 12 Tf 72 720 Td ({_escape(text)}) Tj ET".encode() if text else b""
+        # Each line is drawn with Tj; T* moves down one line (14 points, TL).
+        lines = " T* ".join(f"({_escape(line)}) Tj" for line in text.split("\n"))
+        stream = f"BT /F1 12 Tf 14 TL 72 720 Td {lines} ET".encode() if text else b""
         objects[content_id] = (
             b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream"
         )
