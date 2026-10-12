@@ -8,14 +8,23 @@ get answers backed by evidence from the source — not just AI-generated text.
 **V0.1 — Foundation (done).** Accounts, sign in and workspaces, in the backend
 and the frontend.
 
-**V0.2 — Processing.** Upload PDF and DOCX files into a workspace; their text is
-extracted page by page (PDF) or section by section (Word) in the background,
-with OCR for scanned pages.
+**V0.2 — Processing (done).** Upload PDF and DOCX files into a workspace; their
+text is extracted page by page (PDF) or section by section (Word) in the
+background, with OCR for scanned pages.
+
+**V0.3 — Search (done).** Documents are cut into chunks (page headers and
+footers left out) and embedded with a local model. Search a workspace by
+meaning (pgvector) or by exact words (PostgreSQL full-text search); every result
+shows its page or section, and PDF results open at that page.
+
+**Next — V0.4: grounded Q&A.** Answers written from the retrieved passages,
+with citations to the source pages.
 
 ## Tech stack
 
 - **Backend:** Python, FastAPI, SQLAlchemy, Alembic, Pydantic
-- **Database:** PostgreSQL (pgvector planned)
+- **Database:** PostgreSQL + pgvector (vector search), full-text search
+- **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), Tesseract OCR
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 
 ## Run the backend locally
