@@ -561,3 +561,36 @@ def test_backfill_chunks_and_embeds_older_documents(client, db):
     assert all(c.embedding is not None for c in chunks_of(db, first) + chunks_of(db, second))
     # A second run finds nothing left to do.
     assert backfill_chunks(db) == 0
+
+
+def test_page_headers_and_footers_are_left_out_of_chunks(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    bodies = [
+        "Rent is due monthly.\nIt is paid by bank transfer.\nLate payment costs extra.",
+        "Pets are allowed.\nDogs must be kept on a lead.\nCats may stay indoors.",
+        "The deposit is returned.\nDamage is deducted first.\nKeys must be handed back.",
+    ]
+    pages = [f"ACME LEASE\n{body}\nPage {n} of 3" for n, body in enumerate(bodies, start=1)]
+
+    document_id = upload(client, workspace_id, "lease.pdf", make_pdf(*pages)).json()["id"]
+    parts = client.get(parts_url(workspace_id, document_id)).json()
+
+    assert [c.text for c in chunks_of(db, document_id)] == [
+        "Rent is due monthly. It is paid by bank transfer. Late payment costs extra.",
+        "Pets are allowed. Dogs must be kept on a lead. Cats may stay indoors.",
+        "The deposit is returned. Damage is deducted first. Keys must be handed back.",
+    ]
+    # The stored pages keep the text exactly as extracted.
+    assert parts[0]["text"] == pages[0]
+
+
+def test_backfill_rebuild_makes_every_chunk_again(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "a.pdf", make_pdf("Clause one.")).json()["id"]
+    chunks_of(db, document_id)[0].text = "Made by an older version."
+    db.commit()
+
+    assert backfill_chunks(db) == 0  # nothing missing, nothing changed
+    assert backfill_chunks(db, rebuild=True) == 1
+
+    assert [c.text for c in chunks_of(db, document_id)] == ["Clause one."]
