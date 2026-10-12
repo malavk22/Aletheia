@@ -4,12 +4,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import delete, exists, select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.documents import embeddings
 from app.documents.chunking import chunk_text
+from app.documents.cleaning import remove_edge_lines, repeated_edge_lines
 from app.documents.extraction import (
     ExtractionFailed,
     extract_docx_sections,
@@ -159,10 +160,20 @@ def _extract_text(document: Document, path: Path) -> list[DocumentPart]:
 
 def _make_chunks(parts: list[DocumentPart]) -> list[DocumentChunk]:
     """Cut each part into chunks, numbered in reading order across the whole
-    document. Chunks are cut per part, so none spans two pages or sections."""
+    document. Chunks are cut per part, so none spans two pages or sections.
+
+    PDF page headers and footers (the same line at the top or bottom of many
+    pages) are left out of the chunks: they would appear in every search
+    result and blur what each chunk is about. The parts keep the text exactly
+    as extracted."""
+    pages = [part.text for part in parts if part.page_number is not None]
+    repeated = repeated_edge_lines(pages)
     chunks: list[DocumentChunk] = []
     for part in parts:
-        for text in chunk_text(part.text):
+        part_text = part.text
+        if part.page_number is not None:
+            part_text = remove_edge_lines(part_text, repeated)
+        for text in chunk_text(part_text):
             chunks.append(
                 DocumentChunk(
                     document_id=part.document_id,
@@ -180,10 +191,16 @@ def _embed(chunks: list[DocumentChunk]) -> None:
         chunk.embedding = vector
 
 
-def backfill_chunks(db: Session) -> int:
+def backfill_chunks(db: Session, rebuild: bool = False) -> int:
     """Chunk and embed documents that were processed before chunking and
     embeddings existed. Returns how many chunks were embedded. Safe to run
-    again: documents that already have everything are left alone."""
+    again: documents that already have everything are left alone.
+
+    With `rebuild`, every document's chunks are made again from its stored
+    parts first (after a change to how chunks are made). It is one
+    transaction: if anything fails, the old chunks are kept."""
+    if rebuild:
+        db.execute(delete(DocumentChunk))
     without_chunks = db.scalars(
         select(Document).where(
             Document.status == "ready",
