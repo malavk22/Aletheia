@@ -77,6 +77,13 @@ def fake_embeddings(monkeypatch):
     monkeypatch.setattr(embeddings, "embed_query", fake_vector)
 
 
+@pytest.fixture(autouse=True)
+def no_gemini_key(monkeypatch):
+    # Tests never call the real Gemini (it is slow, rate-limited, and sends
+    # text to Google), even when .env holds a real key.
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+
+
 @pytest.fixture
 def db():
     # Each test runs inside one transaction that is rolled back at the end,
