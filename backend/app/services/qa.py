@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.workspace import Workspace
 from app.qa import llm
-from app.services.search import semantic_search
+from app.services.search import rare_word_search, semantic_search
 
 # How many passages the model reads per question: about 6 x 1,000 characters,
 # enough to cover an answer spread over a few pages, small enough to stay
@@ -31,7 +31,7 @@ def answer_question(db: Session, workspace: Workspace, question: str) -> dict:
     """An answer to `question` written only from this workspace's passages,
     with the passages it cites. Raises llm.LLMError if the model could not
     answer."""
-    passages = semantic_search(db, workspace, question, limit=PASSAGES)
+    passages = _find_passages(db, workspace, question)
     if not passages:
         # Nothing to read: no need to ask the model.
         return {"answer": NOT_FOUND, "citations": []}
@@ -47,6 +47,19 @@ def answer_question(db: Session, workspace: Workspace, question: str) -> dict:
         return {"answer": NOT_FOUND, "citations": []}
     citations = [{"number": n, **passages[n - 1]} for n in sorted(cited)]
     return {"answer": answer, "citations": citations}
+
+
+def _find_passages(db: Session, workspace: Workspace, question: str) -> list[dict]:
+    """The PASSAGES chunks the model reads: those containing the question's
+    rare words first (they name what is asked about), then the closest in
+    meaning (they catch questions worded differently from the documents)."""
+    by_words = rare_word_search(db, workspace, question, limit=PASSAGES)
+    # Twice as many as needed, in case some were already found by words.
+    by_meaning = semantic_search(db, workspace, question, limit=2 * PASSAGES)
+    passages: dict[tuple, dict] = {}
+    for passage in by_words + by_meaning:
+        passages.setdefault((passage["document_id"], passage["chunk_position"]), passage)
+    return list(passages.values())[:PASSAGES]
 
 
 def _prompt(passages: list[dict], question: str) -> str:

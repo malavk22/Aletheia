@@ -1,9 +1,16 @@
+import re
+
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.documents import embeddings
 from app.models.document import Document, DocumentChunk, DocumentPart
 from app.models.workspace import Workspace
+
+# A word found in more than this share of a workspace's chunks says little
+# about which chunk answers a question. A first guess: on a 48-page report
+# "project" was in 36 of 92 chunks, "hosted" in 14 and "guide" in 4.
+COMMON_SHARE = 0.25
 
 
 def semantic_search(db: Session, workspace: Workspace, query: str, limit: int):
@@ -42,6 +49,42 @@ def keyword_search(db: Session, workspace: Workspace, query: str, limit: int):
         score=func.ts_rank_cd(DocumentChunk.search_words, words),
         match=DocumentChunk.search_words.bool_op("@@")(words),
         limit=limit,
+    )
+
+
+def rare_word_search(db: Session, workspace: Workspace, query: str, limit: int):
+    """The chunks containing any of the question's rare words, best first.
+
+    Questions are full of words that say little: "who", "the" (PostgreSQL
+    ignores these already), and words found all over this workspace, such as
+    "project" in a project report. Only words in at most COMMON_SHARE of the
+    workspace's chunks are searched for, and a chunk needs just one of them,
+    so a word missing from the documents ("mentor") doesn't block one that is
+    there ("guide")."""
+    total = _count_chunks(db, workspace)
+    rare = []
+    for word in dict.fromkeys(re.findall(r"\w+", query.lower())):
+        found_in = _count_chunks(
+            db,
+            workspace,
+            DocumentChunk.search_words.bool_op("@@")(
+                func.plainto_tsquery("english", word)
+            ),
+        )
+        # max(1, …): in a tiny workspace a word found once still counts.
+        if 0 < found_in <= max(1, total * COMMON_SHARE):
+            rare.append(word)
+    if not rare:
+        return []
+    return keyword_search(db, workspace, " or ".join(rare), limit)
+
+
+def _count_chunks(db: Session, workspace: Workspace, *conditions) -> int:
+    return db.scalar(
+        select(func.count())
+        .select_from(DocumentChunk)
+        .join(Document, Document.id == DocumentChunk.document_id)
+        .where(Document.workspace_id == workspace.id, *conditions)
     )
 
 
