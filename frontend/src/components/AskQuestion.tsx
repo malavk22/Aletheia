@@ -77,6 +77,7 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
     mutation.reset()
   }
 
+  const showingPassages = view?.kind === 'passages'
   const error = mutation.error
   // 422 (empty question) and 503 (the AI is unavailable) come with a message
   // written for people. Anything else: the server could not be reached.
@@ -104,11 +105,22 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
             }}
           />
         </div>
+        {/* The button whose results are showing is the dark one; Ask is dark
+            before anything is shown, as the main action and the Enter key. */}
         <div className="flex gap-3">
-          <Button type="submit" loading={mutation.isPending}>
+          <Button
+            type="submit"
+            variant={showingPassages ? 'secondary' : 'primary'}
+            loading={mutation.isPending}
+          >
             Ask
           </Button>
-          <Button type="button" variant="secondary" onClick={findPassages}>
+          <Button
+            type="button"
+            variant={showingPassages ? 'primary' : 'secondary'}
+            aria-pressed={showingPassages}
+            onClick={findPassages}
+          >
             Find passages
           </Button>
         </div>
