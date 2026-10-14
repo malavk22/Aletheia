@@ -1,13 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import type { FormEvent } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { documentFileUrl } from '../api/documents.ts'
 import { searchKey, searchWorkspace } from '../api/search.ts'
 import type { SearchMode, SearchResult } from '../api/search.ts'
 import { Button } from './Button.tsx'
 import { FormError } from './FormError.tsx'
-import { TextField } from './TextField.tsx'
 
 // Only the best few: weaker matches add little, and a long list pushes the
 // documents far down the page.
@@ -41,12 +39,18 @@ const MODES: { value: SearchMode; label: string; hint: string; summary: string }
   },
 ]
 
-export function SearchDocuments({ workspaceId }: { workspaceId: string }) {
-  // What is typed, and what was last searched for. Searching runs only on
-  // Enter or the button: each search runs the AI model, and results changing
-  // on every key press would be distracting.
-  const [draft, setDraft] = useState('')
-  const [query, setQuery] = useState('')
+// The passages matching `query`, best first: the "Find passages" results
+// under the workspace's question box (see AskQuestion). Searching runs only
+// when the button is pressed, so `query` changes only then.
+export function PassageResults({
+  workspaceId,
+  query,
+  onClear,
+}: {
+  workspaceId: string
+  query: string
+  onClear: () => void
+}) {
   const [mode, setMode] = useState<SearchMode>('semantic')
   const current = MODES.find((option) => option.value === mode)!
 
@@ -54,47 +58,13 @@ export function SearchDocuments({ workspaceId }: { workspaceId: string }) {
   const { data: results, isFetching, error } = useQuery({
     queryKey: searchKey(workspaceId, query, mode),
     queryFn: () => searchWorkspace(workspaceId, query, mode),
-    enabled: query !== '',
     select: (found) => onePerPlace(found).slice(0, SHOWN_RESULTS),
   })
 
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    setQuery(draft.trim())
-  }
-
-  function clear() {
-    setDraft('')
-    setQuery('')
-  }
-
   return (
-    <section aria-labelledby="search-heading">
-      <h2 id="search-heading" className="font-serif text-xl font-semibold tracking-tight">
-        Search
-      </h2>
-      <form onSubmit={handleSubmit} className="mt-3 flex items-end gap-3">
-        <div className="flex-1">
-          <TextField
-            label="Ask a question, or look for exact words"
-            type="search"
-            placeholder="e.g. When can the contract be ended?"
-            value={draft}
-            maxLength={500}
-            onChange={(event) => {
-              setDraft(event.target.value)
-              // Emptying the box (or its clear button) hides the results.
-              if (event.target.value === '') setQuery('')
-            }}
-          />
-        </div>
-        <Button type="submit" variant="secondary" loading={isFetching}>
-          Search
-        </Button>
-      </form>
-
-      <fieldset className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <legend className="sr-only">Search by</legend>
+    <div className="mt-6">
+      <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <legend className="sr-only">Find passages by</legend>
         <div className="inline-flex rounded-sm border border-line-strong bg-surface p-0.5">
           {MODES.map((option) => (
             <label
@@ -118,6 +88,8 @@ export function SearchDocuments({ workspaceId }: { workspaceId: string }) {
         <p className="text-sm text-ink-muted">{current.hint}</p>
       </fieldset>
 
+      {isFetching && !results && <p className="mt-4 text-sm text-ink-muted">Finding passages…</p>}
+
       {error && (
         <div className="mt-5">
           <FormError>
@@ -127,7 +99,7 @@ export function SearchDocuments({ workspaceId }: { workspaceId: string }) {
       )}
 
       {results && !error && (
-        <div className="mt-6">
+        <div className="mt-4">
           <div className="flex items-baseline justify-between gap-4 border-b border-line pb-2">
             {/* With no results the message below says so already. */}
             <p className="text-sm text-ink-muted">
@@ -136,7 +108,7 @@ export function SearchDocuments({ workspaceId }: { workspaceId: string }) {
             </p>
             <button
               type="button"
-              onClick={clear}
+              onClick={onClear}
               className="rounded-sm text-sm font-medium text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
             >
               Clear
@@ -172,7 +144,7 @@ export function SearchDocuments({ workspaceId }: { workspaceId: string }) {
           )}
         </div>
       )}
-    </section>
+    </div>
   )
 }
 
@@ -235,7 +207,7 @@ function SearchResultItem({
   )
 }
 
-function Tag({ children }: { children: string }) {
+export function Tag({ children }: { children: string }) {
   return (
     <span className="rounded-sm bg-paper-deep px-1.5 py-0.5 text-xs font-medium text-ink-muted">
       {children}

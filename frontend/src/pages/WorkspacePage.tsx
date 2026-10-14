@@ -3,14 +3,14 @@ import { Link, useParams } from 'react-router'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { getWorkspace, workspaceKey } from '../api/workspaces.ts'
 import { AppHeader } from '../components/AppHeader.tsx'
+import { AskQuestion } from '../components/AskQuestion.tsx'
 import { Button } from '../components/Button.tsx'
 import { DeleteWorkspace } from '../components/DeleteWorkspace.tsx'
 import { DocumentList } from '../components/DocumentList.tsx'
 import { FormError } from '../components/FormError.tsx'
-import { SearchDocuments } from '../components/SearchDocuments.tsx'
 import { UploadDocuments } from '../components/UploadDocuments.tsx'
 
-// One workspace: its name, search, an upload button, and its documents.
+// One workspace: its name, the question box, an upload button, and its documents.
 // The id comes from the address, /workspaces/<id>.
 export function WorkspacePage() {
   const { workspaceId = '' } = useParams()
@@ -62,7 +62,7 @@ export function WorkspacePage() {
               Documents in this workspace are only visible to its members.
             </p>
             <div className="mt-10 max-w-3xl space-y-14">
-              <SearchDocuments workspaceId={workspace.id} />
+              <AskQuestion workspaceId={workspace.id} />
               <section aria-labelledby="documents-heading" className="space-y-6">
                 <h2 id="documents-heading" className="font-serif text-xl font-semibold tracking-tight">
                   Documents

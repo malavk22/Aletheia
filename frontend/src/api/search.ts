@@ -23,7 +23,7 @@ export function searchKey(workspaceId: string, query: string, mode: SearchMode) 
 }
 
 // More than are shown: overlapping chunks of one page often match together,
-// and only the best one per page is shown (see SearchDocuments).
+// and only the best one per page is shown (see PassageResults).
 const FETCH_LIMIT = 10
 
 export function searchWorkspace(workspaceId: string, query: string, mode: SearchMode) {
