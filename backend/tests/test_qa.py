@@ -195,3 +195,78 @@ def test_passages_with_rare_words_come_first(client, db, fake_llm):
     # The other places are filled by meaning, without repeating page 6.
     assert calls[0]["prompt"].count("(report.pdf, p. 6)") == 1
     assert "[6] (" in calls[0]["prompt"]
+
+
+# POST /workspaces/{id}/ask — the route around answer_question.
+
+
+def ask(client, workspace_id, question):
+    return client.post(
+        f"/api/v1/workspaces/{workspace_id}/ask", json={"question": question}
+    )
+
+
+def test_ask_returns_the_answer_and_its_citations(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    fake_llm("Notice is 30 days [1].")
+
+    response = ask(client, ada.id, "  terminate the lease with notice  ")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "Notice is 30 days [1]."
+    [citation] = body["citations"]
+    assert citation["number"] == 1
+    assert (citation["filename"], citation["page_number"]) == ("lease.pdf", 2)
+    assert "terminate the lease" in citation["text"]
+
+
+def test_ask_trims_the_question(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    calls = fake_llm("Notice is 30 days [1].")
+
+    ask(client, ada.id, "  terminate the lease  ")
+
+    assert calls[0]["prompt"].endswith("Question: terminate the lease")
+
+
+@pytest.mark.parametrize("question", ["", "   ", "x" * 501])
+def test_ask_rejects_empty_or_too_long_questions(client, db, fake_llm, question):
+    ada = lease_workspace(client, db)
+    calls = fake_llm("unused [1]")
+
+    assert ask(client, ada.id, question).status_code == 422
+    assert calls == []
+
+
+def test_ask_when_gemini_fails_is_503_with_a_plain_message(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    fake_llm(llm.LLMError("Gemini could not answer: 503 UNAVAILABLE model-x"))
+
+    response = ask(client, ada.id, "rent?")
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail == "Couldn't write an answer right now. Try again in a minute."
+    # Google's raw message is logged, not shown.
+    assert "model-x" not in detail
+
+
+def test_ask_in_someone_elses_workspace_is_404(client, db, fake_llm):
+    bob_id = workspace_for(client, "bob@example.com")
+    workspace_for(client, "ada@example.com")  # now signed in as Ada
+    calls = fake_llm("unused [1]")
+
+    response = ask(client, bob_id, "rent?")
+
+    assert response.status_code == 404
+    assert calls == []
+
+
+def test_ask_signed_out_is_401(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    client.post("/api/v1/auth/logout")
+    calls = fake_llm("unused [1]")
+
+    assert ask(client, ada.id, "rent?").status_code == 401
+    assert calls == []
