@@ -175,3 +175,23 @@ def test_only_this_workspaces_passages_are_sent(client, db, fake_llm):
     assert "ada.pdf" in calls[0]["prompt"]
     assert "bob.pdf" not in calls[0]["prompt"]
     assert "secret" not in calls[0]["prompt"]
+
+
+def test_passages_with_rare_words_come_first(client, db, fake_llm):
+    workspace_id = workspace_for(client, "ada@example.com")
+    pages = [f"Chapter {n} of the project describes the project plan." for n in range(1, 6)]
+    pages.append("The guide of this work is Mr Mer.")
+    upload(client, workspace_id, "report.pdf", make_pdf(*pages))
+    calls = fake_llm("The guide is Mr Mer [1].")
+
+    result = answer_question(
+        db, workspace(db, workspace_id), "who is the mentor/guide of the project"
+    )
+
+    # By meaning alone (shared words), the "project" pages are closer; the
+    # page with the rare word "guide" still comes first, as [1].
+    assert calls[0]["prompt"].startswith("Passages:\n\n[1] (report.pdf, p. 6)")
+    assert result["citations"][0]["page_number"] == 6
+    # The other places are filled by meaning, without repeating page 6.
+    assert calls[0]["prompt"].count("(report.pdf, p. 6)") == 1
+    assert "[6] (" in calls[0]["prompt"]

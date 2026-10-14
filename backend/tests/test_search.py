@@ -1,6 +1,11 @@
+import uuid
+
 from docxs import make_docx
 from pdfs import make_pdf
 from test_documents import upload, workspace_for
+
+from app.models.workspace import Workspace
+from app.services.search import rare_word_search
 
 # Tests use the fake embedder from conftest.py, which only counts shared
 # words, so "closest" here means "shares the most words with the question".
@@ -189,3 +194,57 @@ def test_unknown_search_mode_is_rejected(client):
     workspace_id = workspace_for(client, "ada@example.com")
 
     assert search(client, workspace_id, "rent", mode="magic").status_code == 422
+
+
+# rare_word_search is used by Ask (V0.4), not by the search box, so these
+# tests call it directly.
+
+
+def report_workspace(client, db):
+    """A report where "project" is everywhere and "guide" on one page."""
+    workspace_id = workspace_for(client, "ada@example.com")
+    pages = [f"Chapter {n} of the project describes the project plan." for n in range(1, 6)]
+    pages.append("The guide of this work is Mr Mer.")
+    upload(client, workspace_id, "report.pdf", make_pdf(*pages))
+    return db.get(Workspace, uuid.UUID(workspace_id))
+
+
+def test_rare_word_search_ignores_words_found_everywhere(client, db):
+    report = report_workspace(client, db)
+
+    # "project" is in 5 of 6 chunks, so only "guide" is searched for, and
+    # "mentor", which no document contains, does not block it.
+    results = rare_word_search(db, report, "who is the mentor/guide of the project", 10)
+
+    assert [result["page_number"] for result in results] == [6]
+
+
+def test_rare_word_search_with_only_common_words_finds_nothing(client, db):
+    report = report_workspace(client, db)
+
+    assert rare_word_search(db, report, "the project", 10) == []
+
+
+def test_rare_word_search_ranks_chunks_with_more_rare_words_first(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_pdf(
+        "The frontend is hosted on Vercel.",
+        "Vercel and Render host the frontend and backend.",
+        *[f"Chapter {n} has nothing on this." for n in range(1, 7)],
+    )
+    upload(client, workspace_id, "report.pdf", content)
+    report = db.get(Workspace, uuid.UUID(workspace_id))
+
+    results = rare_word_search(db, report, "Vercel Render", 10)
+
+    assert [result["page_number"] for result in results] == [2, 1]
+
+
+def test_rare_word_search_only_looks_in_that_workspace(client, db):
+    bob_workspace = workspace_for(client, "bob@example.com")
+    upload(client, bob_workspace, "bob.pdf", make_pdf("Bob's guide is secret."))
+    ada_id = workspace_for(client, "ada@example.com")  # now signed in as Ada
+    upload(client, ada_id, "ada.pdf", make_pdf("Ada has no such page."))
+    ada = db.get(Workspace, uuid.UUID(ada_id))
+
+    assert rare_word_search(db, ada, "guide", 10) == []
