@@ -17,14 +17,22 @@ footers left out) and embedded with a local model. Search a workspace by
 meaning (pgvector) or by exact words (PostgreSQL full-text search); every result
 shows its page or section, and PDF results open at that page.
 
-**Next — V0.4: grounded Q&A.** Answers written from the retrieved passages,
-with citations to the source pages.
+**V0.4 — Grounded Q&A (done).** One question box per workspace. **Ask** writes
+a short answer from the workspace's most relevant passages (Gemini), and every
+claim carries a numbered source that shows the passage and opens its page.
+Citations are checked by the backend: a source that wasn't among the passages
+is removed, and an answer without any real source is replaced by "the documents
+don't answer this". **Find passages** lists the matching passages, without AI.
+
+**Next — V0.5: structured intelligence.** Names, dates, requirements and tables
+pulled out of documents, each with its source.
 
 ## Tech stack
 
 - **Backend:** Python, FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Database:** PostgreSQL + pgvector (vector search), full-text search
-- **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), Tesseract OCR
+- **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), Tesseract OCR,
+  Google Gemini for answers (`google-genai`)
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 
 ## Run the backend locally
@@ -65,7 +73,15 @@ pytest                          # run tests
 
 The first document processed downloads the embedding model
 (`BAAI/bge-small-en-v1.5`, about 67 MB) into `backend/models/`. It runs on
-the CPU; documents are never sent to an outside service.
+the CPU; uploading, reading and searching documents never uses an outside service.
+
+Answers to questions are written by Google Gemini. Get a free API key at
+[aistudio.google.com](https://aistudio.google.com) and add `GEMINI_API_KEY=...`
+to `backend/.env`. Only the question and the few passages chosen to answer it
+are sent; on Gemini's free tier Google may use them to improve its products, so
+use the free tier with test documents only. Without a key everything else works
+and Ask shows "Couldn't write an answer right now". `LLM_MODEL` and
+`LLM_FALLBACK_MODEL` choose the models (see `.env.example`).
 
 Tests run in their own database, `aletheia_test`, which is created
 automatically on the first run. They never touch the `aletheia` database.
