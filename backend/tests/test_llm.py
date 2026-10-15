@@ -106,3 +106,42 @@ def test_generate_empty_reply_is_empty_text(fake_gemini):
     fake_gemini(None)
 
     assert llm.generate("instructions", "question") == ""
+
+
+SCHEMA = {"type": "object", "properties": {"days": {"type": "integer"}}, "required": ["days"]}
+
+
+def test_generate_json_asks_for_json_with_the_schema_and_parses_it(fake_gemini):
+    models = fake_gemini('{"days": 30}')
+
+    result = llm.generate_json("Extract the notice period.", "Notice is 30 days.", SCHEMA)
+
+    assert result == {"days": 30}
+    [call] = models.calls
+    assert call.config.response_mime_type == "application/json"
+    assert call.config.response_json_schema == SCHEMA
+    assert call.config.system_instruction == "Extract the notice period."
+
+
+def test_plain_generate_does_not_ask_for_json(fake_gemini):
+    models = fake_gemini("text")
+
+    llm.generate("instructions", "question")
+
+    assert models.calls[0].config.response_mime_type is None
+
+
+def test_generate_json_with_invalid_json_is_llm_error(fake_gemini):
+    # E.g. a reply cut off in the middle.
+    fake_gemini('{"days": 3')
+
+    with pytest.raises(llm.LLMError, match="invalid JSON"):
+        llm.generate_json("instructions", "text", SCHEMA)
+
+
+def test_generate_json_falls_back_when_busy(fake_gemini):
+    models = fake_gemini(gemini_error(503), '{"days": 30}')
+
+    assert llm.generate_json("instructions", "text", SCHEMA) == {"days": 30}
+    assert [call.model for call in models.calls] == [MAIN, FALLBACK]
+    assert models.calls[1].config.response_json_schema == SCHEMA
