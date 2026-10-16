@@ -100,6 +100,36 @@ def extract_facts(db: Session, document: Document) -> dict:
     return {"kept": len(kept), "dropped": len(found) - len(kept)}
 
 
+def list_facts(db: Session, document: Document) -> list[dict]:
+    """The document's stored facts in extraction order, each with the page
+    or heading of its part, for display and links."""
+    rows = db.execute(
+        select(DocumentFact, DocumentPart.page_number, DocumentPart.heading, DocumentPart.source)
+        .join(
+            DocumentPart,
+            (DocumentPart.document_id == DocumentFact.document_id)
+            & (DocumentPart.position == DocumentFact.part_position),
+        )
+        .where(DocumentFact.document_id == document.id)
+        .order_by(DocumentFact.position)
+    ).all()
+    return [
+        {
+            "position": fact.position,
+            "kind": fact.kind,
+            "value": fact.value,
+            "normalized": fact.normalized,
+            "about": fact.about,
+            "quote": fact.quote,
+            "part_position": fact.part_position,
+            "page_number": page_number,
+            "heading": heading,
+            "source": source,
+        }
+        for fact, page_number, heading, source in rows
+    ]
+
+
 def _batches(parts: list[DocumentPart]) -> list[list[DocumentPart]]:
     """Consecutive parts grouped up to BATCH_CHARS each. A part is never
     split, so a very long part gets a batch of its own."""
