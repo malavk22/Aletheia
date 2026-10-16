@@ -45,6 +45,9 @@ class Document(Base):
     part_count: Mapped[int | None]
     # How many of those parts were read by OCR (scanned pages).
     ocr_part_count: Mapped[int | None]
+    # When key facts were last extracted (V0.5). Empty: never, which is
+    # different from "extracted, none found".
+    facts_extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -117,3 +120,41 @@ class DocumentChunk(Base):
     search_words: Mapped[str] = mapped_column(
         TSVECTOR, Computed("to_tsvector('english', text)", persisted=True)
     )
+
+
+class DocumentFact(Base):
+    """A fact pulled out of a document by the AI (V0.5): a person, an
+    organization, a date, an amount or a requirement, with the exact sentence
+    it came from and that sentence's page or section.
+
+    Only facts whose quote was found in the part they name are stored, so
+    every fact can be checked against the document itself.
+    """
+
+    __tablename__ = "document_facts"
+    # The fact's part, found by (document, part position). Deleting the part
+    # (or its document) deletes its facts.
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["document_id", "part_position"],
+            ["document_parts.document_id", "document_parts.position"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    # The order the facts were extracted in, from 1.
+    position: Mapped[int] = mapped_column(primary_key=True)
+    # person, organization, date, amount or requirement.
+    kind: Mapped[str] = mapped_column(String(20))
+    # The fact in short: "Mr. Hirenkumar Mer", "2,000 dollars", "1 January 2026".
+    value: Mapped[str] = mapped_column(Text)
+    # Dates only: the same date as YYYY-MM-DD, so dates can be sorted and
+    # compared. Empty when the document gives no full date ("next spring").
+    normalized: Mapped[str | None] = mapped_column(String(10))
+    # What the fact is about: "project guide", "monthly rent", "lease start".
+    about: Mapped[str | None] = mapped_column(Text)
+    # The document's own words the fact comes from, as found in the part.
+    quote: Mapped[str] = mapped_column(Text)
+    # Which part (page or section) the quote is in.
+    part_position: Mapped[int]
