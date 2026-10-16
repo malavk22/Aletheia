@@ -10,6 +10,7 @@ import {
 import type { WorkspaceDocument } from '../api/documents.ts'
 import { Button } from './Button.tsx'
 import { DocumentDetails } from './DocumentDetails.tsx'
+import { KeyFacts } from './KeyFacts.tsx'
 import { FormError } from './FormError.tsx'
 
 export function DocumentList({ workspaceId }: { workspaceId: string }) {
@@ -66,6 +67,8 @@ function DocumentRow({
   const queryClient = useQueryClient()
   // Deleting takes two clicks: "Delete", then "Confirm delete".
   const [confirming, setConfirming] = useState(false)
+  // The key facts panel, opened below the row.
+  const [showFacts, setShowFacts] = useState(false)
   const mutation = useMutation({
     mutationFn: () => deleteDocument(workspaceId, document.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) }),
@@ -77,52 +80,70 @@ function DocumentRow({
   const isPdf = document.content_type === 'application/pdf'
 
   return (
-    <li className="flex items-center justify-between gap-4 py-3">
-      <div className="min-w-0">
-        {/* Opens the original file: a PDF in a new tab, a Word file downloads
-            (the backend tells the browser which). */}
-        <a
-          href={documentFileUrl(workspaceId, document.id)}
-          target={isPdf ? '_blank' : undefined}
-          rel={isPdf ? 'noopener' : undefined}
-          className="block truncate text-sm font-medium hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
-        >
-          {document.filename}
-        </a>
-        <DocumentDetails document={document} />
-        {mutation.isError && <p className="mt-0.5 text-sm text-danger">{UNREACHABLE_MESSAGE}</p>}
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {confirming ? (
-          <>
-            <button
-              type="button"
-              className={`${textButton} text-danger hover:underline`}
-              disabled={mutation.isPending}
-              onClick={() => mutation.mutate()}
-            >
-              {mutation.isPending ? 'Deleting…' : 'Confirm delete'}
-            </button>
-            <button
-              type="button"
-              className={`${textButton} text-ink-muted hover:text-ink`}
-              disabled={mutation.isPending}
-              onClick={() => setConfirming(false)}
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className={`${textButton} text-ink-muted hover:text-danger`}
-            aria-label={`Delete ${document.filename}`}
-            onClick={() => setConfirming(true)}
+    <li className="py-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          {/* Opens the original file: a PDF in a new tab, a Word file downloads
+              (the backend tells the browser which). */}
+          <a
+            href={documentFileUrl(workspaceId, document.id)}
+            target={isPdf ? '_blank' : undefined}
+            rel={isPdf ? 'noopener' : undefined}
+            className="block truncate text-sm font-medium hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
           >
-            Delete
-          </button>
-        )}
+            {document.filename}
+          </a>
+          <DocumentDetails document={document} />
+          {mutation.isError && <p className="mt-0.5 text-sm text-danger">{UNREACHABLE_MESSAGE}</p>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {confirming ? (
+            <>
+              <button
+                type="button"
+                className={`${textButton} text-danger hover:underline`}
+                disabled={mutation.isPending}
+                onClick={() => mutation.mutate()}
+              >
+                {mutation.isPending ? 'Deleting…' : 'Confirm delete'}
+              </button>
+              <button
+                type="button"
+                className={`${textButton} text-ink-muted hover:text-ink`}
+                disabled={mutation.isPending}
+                onClick={() => setConfirming(false)}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Facts come from the extracted text, so only once it is ready. */}
+              {document.status === 'ready' && (
+                <button
+                  type="button"
+                  aria-expanded={showFacts}
+                  className={`${textButton} ${showFacts ? 'text-accent' : 'text-ink-muted hover:text-ink'}`}
+                  onClick={() => setShowFacts(!showFacts)}
+                >
+                  Key facts
+                </button>
+              )}
+              <button
+                type="button"
+                className={`${textButton} text-ink-muted hover:text-danger`}
+                aria-label={`Delete ${document.filename}`}
+                onClick={() => setConfirming(true)}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
       </div>
+      {showFacts && document.status === 'ready' && (
+        <KeyFacts workspaceId={workspaceId} documentId={document.id} />
+      )}
     </li>
   )
 }
