@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+from docxs import make_docx
 from pdfs import make_pdf
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -246,3 +247,121 @@ def test_long_documents_are_sent_in_batches(client, db, fake_gemini_json, monkey
     assert "[part 3]" in calls[1]["prompt"] and "[part 2]" not in calls[1]["prompt"]
     assert "[part 5]" in calls[2]["prompt"]
     assert result == {"kept": 2, "dropped": 0}
+
+
+# GET / POST /workspaces/{id}/documents/{id}/facts
+
+
+def facts_url(workspace_id, document_id):
+    return f"{document_url(workspace_id, document_id)}/facts"
+
+
+def test_before_extraction_there_are_no_facts(client, fake_gemini_json):
+    workspace_id, document_id = lease(client)
+    calls = fake_gemini_json()
+
+    response = client.get(facts_url(workspace_id, document_id))
+
+    assert response.status_code == 200
+    assert response.json() == {"extracted_at": None, "facts": [], "dropped": None}
+    assert calls == []
+
+
+def test_post_extracts_and_get_reads_them_back(client, fake_gemini_json):
+    workspace_id, document_id = lease(client)
+    calls = fake_gemini_json({"facts": [
+        item(),
+        item(quote="Rent is 9 dollars."),  # made up: dropped
+        item(kind="date", value="1 January 2026", about="lease start",
+             normalized="2026-01-01", quote="The lease starts on 1 January 2026.", part=2),
+    ]})
+
+    posted = client.post(facts_url(workspace_id, document_id))
+
+    assert posted.status_code == 200
+    body = posted.json()
+    assert body["dropped"] == 1
+    assert body["extracted_at"] is not None
+    assert [f["value"] for f in body["facts"]] == ["2,000 dollars", "1 January 2026"]
+    date_fact = body["facts"][1]
+    assert date_fact == {
+        "position": 2, "kind": "date", "value": "1 January 2026", "normalized": "2026-01-01",
+        "about": "lease start", "quote": "The lease starts on 1 January 2026.",
+        "part_position": 2, "page_number": 2, "heading": None, "source": "text",
+    }
+    # Reading afterwards gives the same facts, without calling Gemini again.
+    read = client.get(facts_url(workspace_id, document_id)).json()
+    assert read["facts"] == body["facts"]
+    assert read["dropped"] is None
+    assert len(calls) == 1
+
+
+def test_docx_facts_carry_their_heading(client, fake_gemini_json):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_docx(("heading", "Payment"), ("p", "Invoices are paid within 30 days."))
+    document_id = upload(client, workspace_id, "contract.docx", content).json()["id"]
+    calls = fake_gemini_json({"facts": [item(
+        kind="requirement", value="pay invoices within 30 days",
+        quote="Invoices are paid within 30 days.", part=1,
+    )]})
+
+    fact = client.post(facts_url(workspace_id, document_id)).json()["facts"][0]
+
+    assert "[part 1] (Payment)" in calls[0]["prompt"]
+    assert (fact["heading"], fact["page_number"]) == ("Payment", None)
+
+
+def test_extraction_needs_a_processed_document(client, fake_gemini_json):
+    workspace_id = workspace_for(client, "ada@example.com")
+    # A PDF with no text fails processing.
+    document_id = upload(client, workspace_id, "scan.pdf", make_pdf("", "")).json()["id"]
+    calls = fake_gemini_json()
+
+    response = client.post(facts_url(workspace_id, document_id))
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Key facts can be extracted once the document is processed"
+    assert calls == []
+
+
+def test_extraction_when_gemini_fails_is_503_and_keeps_old_facts(client, fake_gemini_json):
+    workspace_id, document_id = lease(client)
+    fake_gemini_json({"facts": [item()]}, llm.LLMError("Gemini could not answer: 503 model-x"))
+    client.post(facts_url(workspace_id, document_id))
+
+    response = client.post(facts_url(workspace_id, document_id))
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail == "Couldn't extract key facts right now. Try again in a minute."
+    assert "model-x" not in detail
+    assert len(client.get(facts_url(workspace_id, document_id)).json()["facts"]) == 1
+
+
+def test_other_users_cannot_read_or_extract_facts(client, fake_gemini_json):
+    workspace_id, document_id = lease(client)
+    workspace_for(client, "bob@example.com")  # now signed in as Bob
+    calls = fake_gemini_json()
+
+    assert client.get(facts_url(workspace_id, document_id)).status_code == 404
+    assert client.post(facts_url(workspace_id, document_id)).status_code == 404
+    assert calls == []
+
+
+def test_facts_require_login(client, fake_gemini_json):
+    workspace_id, document_id = lease(client)
+    client.post("/api/v1/auth/logout")
+    calls = fake_gemini_json()
+
+    assert client.get(facts_url(workspace_id, document_id)).status_code == 401
+    assert client.post(facts_url(workspace_id, document_id)).status_code == 401
+    assert calls == []
+
+
+def test_a_document_from_another_workspace_is_404(client, fake_gemini_json):
+    workspace_id, document_id = lease(client)
+    # Ada's second workspace: the document isn't in it.
+    other_workspace = client.post("/api/v1/workspaces", json={"name": "Other"}).json()["id"]
+    fake_gemini_json()
+
+    assert client.get(facts_url(other_workspace, document_id)).status_code == 404
