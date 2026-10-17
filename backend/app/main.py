@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import auth, documents, facts, health, qa, search, workspaces
+from app.api.routes import auth, compare, documents, facts, health, qa, search, workspaces
 from app.services.documents import fail_interrupted_documents, open_session
 
 
@@ -24,3 +24,4 @@ app.include_router(documents.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(qa.router, prefix="/api/v1")
 app.include_router(facts.router, prefix="/api/v1")
+app.include_router(compare.router, prefix="/api/v1")

@@ -139,3 +139,94 @@ def test_comparing_the_other_way_swaps_removed_and_added(client, db):
     counts = compare_versions(db, new, old)["counts"]
 
     assert counts == {"changed": 1, "formatting": 1, "removed": 1, "added": 1}
+
+
+# GET /workspaces/{id}/compare
+
+
+def compare_url(workspace_id, old_id, new_id):
+    return f"/api/v1/workspaces/{workspace_id}/compare?old={old_id}&new={new_id}"
+
+
+def two_versions(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    old_id, new_id = (
+        upload(client, workspace_id, name, make_pdf(*pages)).json()["id"]
+        for name, pages in (("lease-v1.pdf", LEASE_V1), ("lease-v2.pdf", LEASE_V2))
+    )
+    return workspace_id, old_id, new_id
+
+
+def test_the_route_returns_the_changes_with_pages_on_both_sides(client):
+    workspace_id, old_id, new_id = two_versions(client)
+
+    response = client.get(compare_url(workspace_id, old_id, new_id))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["counts"] == {"changed": 1, "formatting": 1, "removed": 1, "added": 1}
+    page_1 = {"part_position": 1, "page_number": 1, "heading": None}
+    assert body["changes"][0] == {
+        "kind": "changed",
+        "old": {"text": "Rent is 2,000 dollars a month.", **page_1},
+        "new": {"text": "Rent is 2,200 dollars a month.", **page_1},
+    }
+    assert body["changes"][2]["new"] is None  # removed
+    assert body["changes"][3]["old"] is None  # added
+
+
+def test_a_document_cannot_be_compared_with_itself(client):
+    workspace_id, old_id, _ = two_versions(client)
+
+    response = client.get(compare_url(workspace_id, old_id, old_id))
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Choose two different documents"
+
+
+def test_both_documents_must_be_processed(client):
+    workspace_id, old_id, _ = two_versions(client)
+    # A PDF with no text fails processing.
+    failed_id = upload(client, workspace_id, "scan.pdf", make_pdf("")).json()["id"]
+
+    response = client.get(compare_url(workspace_id, old_id, failed_id))
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Documents can be compared once both are processed"
+
+
+def test_a_document_from_another_workspace_is_404(client):
+    workspace_id, old_id, _ = two_versions(client)
+    # Ada's second workspace, with its own document.
+    other_workspace = client.post("/api/v1/workspaces", json={"name": "Other"}).json()["id"]
+    content = make_pdf("Pets are allowed.")
+    other_id = upload(client, other_workspace, "other.pdf", content).json()["id"]
+
+    # Either way round, and from either workspace.
+    assert client.get(compare_url(workspace_id, old_id, other_id)).status_code == 404
+    assert client.get(compare_url(other_workspace, other_id, old_id)).status_code == 404
+
+
+def test_other_users_cannot_compare(client):
+    workspace_id, old_id, new_id = two_versions(client)
+    workspace_for(client, "bob@example.com")  # now signed in as Bob
+
+    response = client.get(compare_url(workspace_id, old_id, new_id))
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Workspace not found"
+
+
+def test_comparing_requires_login(client):
+    workspace_id, old_id, new_id = two_versions(client)
+    client.post("/api/v1/auth/logout")
+
+    assert client.get(compare_url(workspace_id, old_id, new_id)).status_code == 401
+
+
+def test_both_documents_must_be_given(client):
+    workspace_id, old_id, _ = two_versions(client)
+
+    url = f"/api/v1/workspaces/{workspace_id}/compare?old={old_id}"
+    assert client.get(url).status_code == 422
+    assert client.get(compare_url(workspace_id, old_id, "not-an-id")).status_code == 422
