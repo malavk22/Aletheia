@@ -24,15 +24,21 @@ Citations are checked by the backend: a source that wasn't among the passages
 is removed, and an answer without any real source is replaced by "the documents
 don't answer this". **Find passages** lists the matching passages, without AI.
 
-**Next — V0.5: structured intelligence.** Names, dates, requirements and tables
-pulled out of documents, each with its source.
+**V0.5 — Structured intelligence (done).** **Key facts** on every processed
+document: the people, organizations, dates, amounts and requirements in it,
+pulled out by Gemini as structured data. Every fact carries the document's own
+sentence and its page; the backend keeps a fact only if that sentence really is
+on that page, and dates are checked to be real. Facts are shown by group, with
+repeats shown once. (Tables and custom fields come later.)
+
+**Next — V0.6: comparison.** Comparing documents side by side, with sources.
 
 ## Tech stack
 
 - **Backend:** Python, FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Database:** PostgreSQL + pgvector (vector search), full-text search
 - **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), Tesseract OCR,
-  Google Gemini for answers (`google-genai`)
+  Google Gemini for answers and key facts (`google-genai`)
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 
 ## Run the backend locally
@@ -79,8 +85,10 @@ Answers to questions are written by Google Gemini. Get a free API key at
 [aistudio.google.com](https://aistudio.google.com) and add `GEMINI_API_KEY=...`
 to `backend/.env`. Only the question and the few passages chosen to answer it
 are sent; on Gemini's free tier Google may use them to improve its products, so
-use the free tier with test documents only. Without a key everything else works
-and Ask shows "Couldn't write an answer right now". `LLM_MODEL` and
+use the free tier with test documents only. Key facts also use Gemini and send
+the whole document's text, only when you click "Key facts" on a document not
+extracted before, or "Extract again" (a 50-page report takes about a minute). Without a key
+everything else works; Ask and Key facts show "Couldn't … right now". `LLM_MODEL` and
 `LLM_FALLBACK_MODEL` choose the models (see `.env.example`).
 
 Tests run in their own database, `aletheia_test`, which is created
