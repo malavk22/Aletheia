@@ -365,3 +365,13 @@ def test_a_document_from_another_workspace_is_404(client, fake_gemini_json):
     fake_gemini_json()
 
     assert client.get(facts_url(other_workspace, document_id)).status_code == 404
+
+
+def test_the_document_list_says_whether_facts_were_extracted(client, fake_gemini_json):
+    workspace_id, document_id = lease(client)
+    fake_gemini_json({"facts": [item()]})
+    documents_url = f"/api/v1/workspaces/{workspace_id}/documents"
+
+    assert client.get(documents_url).json()[0]["facts_extracted_at"] is None
+    client.post(facts_url(workspace_id, document_id))
+    assert client.get(documents_url).json()[0]["facts_extracted_at"] is not None

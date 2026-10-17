@@ -85,6 +85,7 @@ def test_upload_pdf_is_stored_and_listed(client, upload_dir):
         "error",
         "part_count",
         "ocr_part_count",
+        "facts_extracted_at",
     }
     # The upload answers before the text is extracted.
     assert document["status"] == "processing"

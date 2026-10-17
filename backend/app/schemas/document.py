@@ -19,6 +19,8 @@ class DocumentRead(BaseModel):
     # How many of those parts were read by OCR (scanned pages).
     ocr_part_count: int | None
     created_at: datetime
+    # When key facts were last extracted; empty if never.
+    facts_extracted_at: datetime | None
 
 
 class DocumentPartRead(BaseModel):
