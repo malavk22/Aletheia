@@ -44,6 +44,29 @@ function FactsSkeleton() {
   )
 }
 
+// Where a fact is: its page (PDF) or heading (DOCX).
+function placeOf(fact: Fact) {
+  return fact.page_number !== null ? `p. ${fact.page_number}` : (fact.heading ?? 'Before the first heading')
+}
+
+// The same value is often found on many pages (a report names its university
+// on every few pages). Show it once, with its first quote, and list the other
+// places it appears.
+function merged(facts: Fact[]) {
+  const items = new Map<string, { fact: Fact; alsoIn: string[] }>()
+  for (const fact of facts) {
+    const key = fact.value.trim().toLowerCase()
+    const item = items.get(key)
+    if (item === undefined) {
+      items.set(key, { fact, alsoIn: [] })
+    } else {
+      const place = placeOf(fact)
+      if (place !== placeOf(item.fact) && !item.alsoIn.includes(place)) item.alsoIn.push(place)
+    }
+  }
+  return [...items.values()]
+}
+
 // A document's key facts: people, organizations, dates, amounts and
 // requirements, each with the sentence it comes from. Shown under a document
 // in the list once it is processed. With `extractOnOpen`, a document that was
@@ -102,8 +125,14 @@ export function KeyFacts({
   const dropped = extraction.data?.dropped ?? 0
   const groups = GROUPS.map((group) => ({
     ...group,
-    facts: data.facts.filter((fact) => fact.kind === group.kind),
-  })).filter((group) => group.facts.length > 0)
+    items: merged(
+      inOrder(
+        group.kind,
+        data.facts.filter((fact) => fact.kind === group.kind),
+      ),
+    ),
+  })).filter((group) => group.items.length > 0)
+  const total = groups.reduce((sum, group) => sum + group.items.length, 0)
   // The chosen group, or the first one with facts.
   const shown = groups.find((group) => group.kind === chosenKind) ?? groups[0]
 
@@ -112,9 +141,7 @@ export function KeyFacts({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-medium">
           Key facts
-          {extracted && data.facts.length > 0 && (
-            <span className="font-normal text-ink-muted"> · {data.facts.length}</span>
-          )}
+          {extracted && total > 0 && <span className="font-normal text-ink-muted"> · {total}</span>}
         </h3>
         <Button
           variant={extracted ? 'secondary' : 'primary'}
@@ -163,7 +190,7 @@ export function KeyFacts({
               <>
                 {/* One button per group with its count; the active one is dark. */}
                 <div className="mt-3 flex flex-wrap gap-2 border-b border-line pb-3">
-                  {groups.map(({ kind, label, facts }) => (
+                  {groups.map(({ kind, label, items }) => (
                     <button
                       key={kind}
                       type="button"
@@ -175,17 +202,18 @@ export function KeyFacts({
                       }`}
                       onClick={() => setChosenKind(kind)}
                     >
-                      {label} <span className="opacity-75">{facts.length}</span>
+                      {label} <span className="opacity-75">{items.length}</span>
                     </button>
                   ))}
                 </div>
                 <ul className="divide-y divide-line">
-                  {inOrder(shown.kind, shown.facts).map((fact) => (
+                  {shown.items.map(({ fact, alsoIn }) => (
                     <FactItem
                       key={fact.position}
                       workspaceId={workspaceId}
                       documentId={documentId}
                       fact={fact}
+                      alsoIn={alsoIn}
                     />
                   ))}
                 </ul>
@@ -202,13 +230,15 @@ function FactItem({
   workspaceId,
   documentId,
   fact,
+  alsoIn,
 }: {
   workspaceId: string
   documentId: string
   fact: Fact
+  // Other places with the same value.
+  alsoIn: string[]
 }) {
-  const where =
-    fact.page_number !== null ? `p. ${fact.page_number}` : (fact.heading ?? 'Before the first heading')
+  const where = placeOf(fact)
 
   return (
     <li className="py-3">
@@ -234,6 +264,9 @@ function FactItem({
       <blockquote className="mt-1.5 border-l-2 border-line-strong pl-3 font-serif text-[14px] leading-relaxed text-ink-muted">
         {fact.quote}
       </blockquote>
+      {alsoIn.length > 0 && (
+        <p className="mt-1.5 text-xs text-ink-muted">Also in: {alsoIn.join(', ')}</p>
+      )}
     </li>
   )
 }
