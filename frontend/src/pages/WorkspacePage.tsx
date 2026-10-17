@@ -64,9 +64,15 @@ export function WorkspacePage() {
             <div className="mt-10 max-w-3xl space-y-14">
               <AskQuestion workspaceId={workspace.id} />
               <section aria-labelledby="documents-heading" className="space-y-6">
-                <h2 id="documents-heading" className="font-serif text-xl font-semibold tracking-tight">
-                  Documents
-                </h2>
+                <div>
+                  <h2 id="documents-heading" className="font-serif text-xl font-semibold tracking-tight">
+                    Documents
+                  </h2>
+                  <p className="mt-1 text-sm text-ink-muted">
+                    Ask and Key facts use Google Gemini: the relevant text of your documents is
+                    sent to Google.
+                  </p>
+                </div>
                 <UploadDocuments workspaceId={workspace.id} />
                 <DocumentList workspaceId={workspace.id} />
               </section>

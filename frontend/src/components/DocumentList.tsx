@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { UNREACHABLE_MESSAGE } from '../api/client.ts'
 import {
@@ -8,6 +8,7 @@ import {
   listDocuments,
 } from '../api/documents.ts'
 import type { WorkspaceDocument } from '../api/documents.ts'
+import { extractFactsKey } from '../api/facts.ts'
 import { Button } from './Button.tsx'
 import { DocumentDetails } from './DocumentDetails.tsx'
 import { KeyFacts } from './KeyFacts.tsx'
@@ -69,6 +70,8 @@ function DocumentRow({
   const [confirming, setConfirming] = useState(false)
   // The key facts panel, opened below the row.
   const [showFacts, setShowFacts] = useState(false)
+  // True while this document's key facts are being extracted (in the panel).
+  const extracting = useIsMutating({ mutationKey: extractFactsKey(document.id) }) > 0
   const mutation = useMutation({
     mutationFn: () => deleteDocument(workspaceId, document.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) }),
@@ -123,10 +126,16 @@ function DocumentRow({
                 <button
                   type="button"
                   aria-expanded={showFacts}
-                  className={`${textButton} ${showFacts ? 'text-accent' : 'text-ink-muted hover:text-ink'}`}
+                  className={`${textButton} inline-flex items-center gap-1.5 ${showFacts ? 'text-accent' : 'text-ink-muted hover:text-ink'}`}
                   onClick={() => setShowFacts(!showFacts)}
                 >
-                  Key facts
+                  {extracting && (
+                    <span
+                      aria-hidden="true"
+                      className="size-3 animate-spin rounded-full border-2 border-current border-r-transparent"
+                    />
+                  )}
+                  {extracting ? 'Extracting key facts…' : 'Key facts'}
                 </button>
               )}
               <button
@@ -142,7 +151,12 @@ function DocumentRow({
         </div>
       </div>
       {showFacts && document.status === 'ready' && (
-        <KeyFacts workspaceId={workspaceId} documentId={document.id} />
+        <KeyFacts
+          workspaceId={workspaceId}
+          documentId={document.id}
+          // First open of a never-extracted document: one click extracts.
+          extractOnOpen={document.facts_extracted_at === null}
+        />
       )}
     </li>
   )

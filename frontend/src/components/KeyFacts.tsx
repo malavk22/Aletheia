@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
-import { documentFileUrl } from '../api/documents.ts'
-import { extractFacts, factsKey, getFacts } from '../api/facts.ts'
+import { documentFileUrl, documentsKey } from '../api/documents.ts'
+import { extractFacts, extractFactsKey, factsKey, getFacts } from '../api/facts.ts'
 import type { Fact, FactKind } from '../api/facts.ts'
 import { Button } from './Button.tsx'
 import { FormError } from './FormError.tsx'
@@ -28,10 +29,34 @@ function inOrder(kind: FactKind, facts: Fact[]) {
   })
 }
 
+// Grey bars in the shape of facts, shown while Gemini reads the document.
+function FactsSkeleton() {
+  return (
+    <div aria-hidden="true" className="mt-3 animate-pulse space-y-4">
+      {[0, 1, 2].map((row) => (
+        <div key={row} className="space-y-2">
+          <div className="h-3.5 w-2/5 rounded-sm bg-paper-deep" />
+          <div className="h-3 w-full rounded-sm bg-paper-deep" />
+          <div className="h-3 w-4/5 rounded-sm bg-paper-deep" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // A document's key facts: people, organizations, dates, amounts and
 // requirements, each with the sentence it comes from. Shown under a document
-// in the list once it is processed.
-export function KeyFacts({ workspaceId, documentId }: { workspaceId: string; documentId: string }) {
+// in the list once it is processed. With `extractOnOpen`, a document that was
+// never extracted is extracted as soon as the panel opens.
+export function KeyFacts({
+  workspaceId,
+  documentId,
+  extractOnOpen,
+}: {
+  workspaceId: string
+  documentId: string
+  extractOnOpen: boolean
+}) {
   const queryClient = useQueryClient()
   const key = factsKey(workspaceId, documentId)
   const { data, isPending, error } = useQuery({
@@ -39,12 +64,30 @@ export function KeyFacts({ workspaceId, documentId }: { workspaceId: string; doc
     queryFn: () => getFacts(workspaceId, documentId),
   })
   const extraction = useMutation({
+    // Lets the "Key facts" button in the list show that this one is running.
+    mutationKey: extractFactsKey(documentId),
     mutationFn: () => extractFacts(workspaceId, documentId),
-    // The reply holds the new facts: show them without asking again.
-    onSuccess: (facts) => queryClient.setQueryData(key, facts),
+    onSuccess: (facts) => {
+      // The reply holds the new facts: show them without asking again.
+      queryClient.setQueryData(key, facts)
+      // The list now has to know this document was extracted.
+      return queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) })
+    },
   })
+  // The group shown; one at a time keeps a long document's panel short.
+  const [chosenKind, setChosenKind] = useState<FactKind | null>(null)
 
-  if (isPending) return <p className="mt-3 text-sm text-ink-muted">Loading key facts…</p>
+  // Start only once, even if React runs this effect twice (development mode).
+  const started = useRef(false)
+  const { mutate } = extraction
+  useEffect(() => {
+    if (extractOnOpen && data?.extracted_at === null && !started.current) {
+      started.current = true
+      mutate()
+    }
+  }, [extractOnOpen, data, mutate])
+
+  if (isPending) return <FactsSkeleton />
   if (error || !data) return <FormError>{UNREACHABLE_MESSAGE}</FormError>
 
   const extracted = data.extracted_at !== null
@@ -57,6 +100,12 @@ export function KeyFacts({ workspaceId, documentId }: { workspaceId: string; doc
       : UNREACHABLE_MESSAGE
   // Only the reply to an extraction says how many facts were left out.
   const dropped = extraction.data?.dropped ?? 0
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    facts: data.facts.filter((fact) => fact.kind === group.kind),
+  })).filter((group) => group.facts.length > 0)
+  // The chosen group, or the first one with facts.
+  const shown = groups.find((group) => group.kind === chosenKind) ?? groups[0]
 
   return (
     <div className="mt-3 rounded-sm border border-line bg-surface p-4">
@@ -80,14 +129,17 @@ export function KeyFacts({ workspaceId, documentId }: { workspaceId: string; doc
         {!extracted && !extraction.isPending && (
           <p className="mt-2 text-sm text-ink-muted">
             Pulls out the people, organizations, dates, amounts and requirements in this document,
-            each with the sentence it comes from. The document's text is sent to Google Gemini.
+            each with the sentence it comes from.
           </p>
         )}
 
         {extraction.isPending && (
-          <p className="mt-2 text-sm text-ink-muted">
-            Reading the document… This can take up to a minute for a long document.
-          </p>
+          <>
+            <p className="mt-2 text-sm text-ink-muted">
+              Reading the document… This can take up to a minute for a long document.
+            </p>
+            <FactsSkeleton />
+          </>
         )}
 
         {extraction.isError && !extraction.isPending && (
@@ -105,32 +157,39 @@ export function KeyFacts({ workspaceId, documentId }: { workspaceId: string; doc
                 sentence it came from couldn't be found on its page.
               </p>
             )}
-            {data.facts.length === 0 ? (
+            {shown === undefined ? (
               <p className="mt-2 text-sm text-ink-muted">No key facts found in this document.</p>
             ) : (
-              <div className="mt-2 space-y-5">
-                {GROUPS.map(({ kind, label }) => {
-                  const facts = data.facts.filter((fact) => fact.kind === kind)
-                  if (facts.length === 0) return null
-                  return (
-                    <section key={kind}>
-                      <h4 className="border-b border-line pb-1 text-xs font-semibold tracking-wide text-ink-muted uppercase">
-                        {label}
-                      </h4>
-                      <ul className="divide-y divide-line">
-                        {inOrder(kind, facts).map((fact) => (
-                          <FactItem
-                            key={fact.position}
-                            workspaceId={workspaceId}
-                            documentId={documentId}
-                            fact={fact}
-                          />
-                        ))}
-                      </ul>
-                    </section>
-                  )
-                })}
-              </div>
+              <>
+                {/* One button per group with its count; the active one is dark. */}
+                <div className="mt-3 flex flex-wrap gap-2 border-b border-line pb-3">
+                  {groups.map(({ kind, label, facts }) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      aria-pressed={kind === shown.kind}
+                      className={`rounded-sm px-2.5 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                        kind === shown.kind
+                          ? 'bg-accent text-white'
+                          : 'border border-line-strong text-ink-muted hover:text-ink'
+                      }`}
+                      onClick={() => setChosenKind(kind)}
+                    >
+                      {label} <span className="opacity-75">{facts.length}</span>
+                    </button>
+                  ))}
+                </div>
+                <ul className="divide-y divide-line">
+                  {inOrder(shown.kind, shown.facts).map((fact) => (
+                    <FactItem
+                      key={fact.position}
+                      workspaceId={workspaceId}
+                      documentId={documentId}
+                      fact={fact}
+                    />
+                  ))}
+                </ul>
+              </>
             )}
           </>
         )}

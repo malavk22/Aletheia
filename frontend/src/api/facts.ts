@@ -31,6 +31,11 @@ export function factsKey(workspaceId: string, documentId: string) {
   return ['workspaces', workspaceId, 'documents', documentId, 'facts']
 }
 
+// Names a running extraction, so the document list can show it.
+export function extractFactsKey(documentId: string) {
+  return ['extract-facts', documentId]
+}
+
 function factsPath(workspaceId: string, documentId: string) {
   return `/workspaces/${workspaceId}/documents/${documentId}/facts`
 }

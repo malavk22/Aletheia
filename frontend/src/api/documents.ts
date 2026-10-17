@@ -16,6 +16,8 @@ export type WorkspaceDocument = {
   // How many of those parts were read by OCR (scanned pages).
   ocr_part_count: number | null
   created_at: string
+  // When key facts were last extracted; null if never.
+  facts_extracted_at: string | null
 }
 
 export function documentsKey(workspaceId: string) {
