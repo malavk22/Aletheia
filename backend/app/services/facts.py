@@ -18,10 +18,11 @@ INSTRUCTIONS = """You pull key facts out of a document.
 The document is given as numbered parts, like "[part 3] (p. 3)". For each
 important fact, give:
 - kind: one of person, organization, date, amount, requirement.
-  person: a named person. organization: a named company, university, team or
-  service. date: a specific date or deadline. amount: money, quantities,
-  durations, percentages. requirement: something someone must, shall or is
-  required to do.
+  person: a named person. organization: a named company, university,
+  government body or regulator - not software, libraries, frameworks,
+  programming languages, file formats or names from code. date: a specific
+  date or deadline. amount: money, quantities, durations, percentages.
+  requirement: something someone must, shall or is required to do.
 - value: the fact in a few words, e.g. "Mr. Hirenkumar Mer", "2,000 dollars".
 - about: what the fact is about, in a few words, e.g. "project guide",
   "monthly rent".
