@@ -5,6 +5,7 @@ import { getWorkspace, workspaceKey } from '../api/workspaces.ts'
 import { AppHeader } from '../components/AppHeader.tsx'
 import { AskQuestion } from '../components/AskQuestion.tsx'
 import { Button } from '../components/Button.tsx'
+import { CompareDocuments } from '../components/CompareDocuments.tsx'
 import { DeleteWorkspace } from '../components/DeleteWorkspace.tsx'
 import { DocumentList } from '../components/DocumentList.tsx'
 import { FormError } from '../components/FormError.tsx'
@@ -75,6 +76,17 @@ export function WorkspacePage() {
                 </div>
                 <UploadDocuments workspaceId={workspace.id} />
                 <DocumentList workspaceId={workspace.id} />
+              </section>
+              <section aria-labelledby="compare-heading" className="space-y-6">
+                <div>
+                  <h2 id="compare-heading" className="font-serif text-xl font-semibold tracking-tight">
+                    Compare versions
+                  </h2>
+                  <p className="mt-1 text-sm text-ink-muted">
+                    What changed between two documents, sentence by sentence. Runs without AI.
+                  </p>
+                </div>
+                <CompareDocuments workspaceId={workspace.id} />
               </section>
             </div>
             <div className="mt-16">
