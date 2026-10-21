@@ -132,7 +132,13 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
               >
                 <option value="">Choose a document…</option>
                 {ready.map((document) => (
-                  <option key={document.id} value={document.id}>
+                  // The document chosen in the other dropdown can't be chosen
+                  // here: a document isn't compared with itself.
+                  <option
+                    key={document.id}
+                    value={document.id}
+                    disabled={document.id === (index === 0 ? newId : oldId)}
+                  >
                     {document.filename}
                   </option>
                 ))}
@@ -143,9 +149,6 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
       </div>
 
       <div aria-live="polite">
-        {oldId !== '' && oldId === newId && (
-          <p className="text-sm text-ink-muted">Choose two different documents.</p>
-        )}
         {chosen && comparison.isPending && <p className="text-sm text-ink-muted">Comparing…</p>}
         {chosen && comparison.isError && <FormError>{errorMessage}</FormError>}
 
@@ -327,32 +330,19 @@ function ChangeItem({
   // ones are cut to two lines instead.
   const long = words === null && (change.old ?? change.new)!.text.length > 160
   const canExpand = long || (short !== null && [...short.old, ...short.new].includes(null))
-  // Money, dates, deadlines: a changed word with a digit, or a removed/added
-  // sentence with one, gets a "number" tag so it stands out.
-  const number = words
-    ? [...words.old, ...words.new].some((word) => word.changed && /\d/.test(word.word))
-    : /\d/.test((change.old ?? change.new)!.text)
-
   return (
     <li className="rounded-sm border border-line bg-surface p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex items-center gap-2">
-          <span
-            className={`text-xs font-semibold tracking-wide uppercase ${
-              change.kind === 'removed'
-                ? 'text-danger'
-                : change.kind === 'added'
-                  ? 'text-added'
-                  : 'text-ink-muted'
-            }`}
-          >
-            {LABELS[change.kind]}
-          </span>
-          {number && (
-            <span className="rounded-sm border border-line-strong px-1.5 text-[11px] font-medium text-ink">
-              number
-            </span>
-          )}
+        <span
+          className={`text-xs font-semibold tracking-wide uppercase ${
+            change.kind === 'removed'
+              ? 'text-danger'
+              : change.kind === 'added'
+                ? 'text-added'
+                : 'text-ink-muted'
+          }`}
+        >
+          {LABELS[change.kind]}
         </span>
         {/* Where the sentence is in each version: the provenance of the change. */}
         <span className="flex flex-wrap gap-3">
