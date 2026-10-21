@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
+import type { ReactNode } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { compareDocuments, comparisonKey } from '../api/compare.ts'
 import type { Change, Sentence } from '../api/compare.ts'
@@ -121,13 +122,21 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
 
         {chosen && data && (
           <>
-            <p className="text-sm text-ink-muted">
-              {meaningful.length === 0
-                ? 'No changes in wording.'
-                : `${data.counts.changed} changed · ${data.counts.removed} removed · ${data.counts.added} added`}
-            </p>
+            {meaningful.length === 0 ? (
+              <p className="text-sm text-ink-muted">No changes in wording.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 text-xs font-medium">
+                {(['changed', 'removed', 'added'] as const)
+                  .filter((kind) => data.counts[kind] > 0)
+                  .map((kind) => (
+                    <span key={kind} className={`rounded-sm px-2 py-0.5 ${BADGES[kind]}`}>
+                      {data.counts[kind]} {kind}
+                    </span>
+                  ))}
+              </div>
+            )}
             {meaningful.length > 0 && (
-              <ul className="mt-2 divide-y divide-line border-y border-line">
+              <ul className="mt-3 space-y-3">
                 {meaningful.map((change, index) => (
                   <ChangeItem
                     key={index}
@@ -148,11 +157,15 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
                     : `${formatting.length} formatting-only changes`}{' '}
                   (spacing, capitals or punctuation)
                 </summary>
-                <ul className="mt-2 divide-y divide-line">
+                <ul className="mt-3 space-y-3">
                   {formatting.map((change, index) => (
-                    <li key={index} className="py-2">
-                      <p className="text-ink-muted">{change.old?.text}</p>
-                      <p>{change.new?.text}</p>
+                    <li key={index} className="space-y-1.5 rounded-sm border border-line bg-surface p-3">
+                      <Row side="old" tone="neutral">
+                        {change.old?.text}
+                      </Row>
+                      <Row side="new" tone="neutral">
+                        {change.new?.text}
+                      </Row>
                     </li>
                   ))}
                 </ul>
@@ -167,6 +180,34 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
 
 const LABELS = { changed: 'Changed', removed: 'Removed', added: 'Added', formatting: 'Formatting' }
 
+const BADGES = {
+  changed: 'bg-paper-deep text-ink',
+  removed: 'bg-danger-soft text-danger',
+  added: 'bg-added-soft text-added',
+}
+
+// Unchanged words kept on each side of a changed word; the rest of a long
+// sentence becomes "…" until "Show full sentence".
+const CONTEXT = 5
+
+type Word = { word: string; changed: boolean }
+
+// The words to show: changed words with CONTEXT words around them; each run
+// of other words becomes one null ("…").
+function trimmed(words: Word[]) {
+  const keep = words.map((_, index) =>
+    words
+      .slice(Math.max(0, index - CONTEXT), index + CONTEXT + 1)
+      .some((word) => word.changed),
+  )
+  const shown: (Word | null)[] = []
+  words.forEach((word, index) => {
+    if (keep[index]) shown.push(word)
+    else if (shown.at(-1) !== null) shown.push(null)
+  })
+  return shown
+}
+
 function ChangeItem({
   workspaceId,
   oldId,
@@ -178,12 +219,20 @@ function ChangeItem({
   newId: string
   change: Change
 }) {
-  const words = change.kind === 'changed' && change.old && change.new
-    ? changedWords(change.old.text, change.new.text)
-    : null
+  const [full, setFull] = useState(false)
+  const words =
+    change.kind === 'changed' && change.old && change.new
+      ? changedWords(change.old.text, change.new.text)
+      : null
+  const short = words && { old: trimmed(words.old), new: trimmed(words.new) }
+  const shown = full ? words : short
+  // A whole removed/added sentence has no changed words to centre on: long
+  // ones are cut to two lines instead.
+  const long = words === null && (change.old ?? change.new)!.text.length > 160
+  const canExpand = long || (short !== null && [...short.old, ...short.new].includes(null))
 
   return (
-    <li className="py-4">
+    <li className="rounded-sm border border-line bg-surface p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span
           className={`text-xs font-semibold tracking-wide uppercase ${
@@ -207,44 +256,84 @@ function ChangeItem({
         </span>
       </div>
 
-      <div className="mt-1.5 space-y-1 font-serif text-[15px] leading-relaxed">
-        {words ? (
+      <div className="mt-2 space-y-1.5">
+        {shown ? (
           <>
-            <p>
-              {words.old.map(({ word, changed }, index) =>
-                changed ? (
-                  <del key={index} className="bg-danger-soft text-danger">
-                    {word}{' '}
-                  </del>
-                ) : (
-                  <span key={index}>{word} </span>
-                ),
-              )}
-            </p>
-            <p>
-              {words.new.map(({ word, changed }, index) =>
-                changed ? (
-                  <ins key={index} className="bg-added-soft text-added no-underline">
-                    {word}{' '}
-                  </ins>
-                ) : (
-                  <span key={index}>{word} </span>
-                ),
-              )}
-            </p>
+            <Row side="old" tone="removed">
+              <Words words={shown.old} side="old" />
+            </Row>
+            <Row side="new" tone="added">
+              <Words words={shown.new} side="new" />
+            </Row>
           </>
         ) : change.kind === 'removed' ? (
-          <p>
-            <del className="bg-danger-soft text-danger">{change.old?.text}</del>
-          </p>
+          <Row side="old" tone="removed" clamp={long && !full}>
+            {change.old?.text}
+          </Row>
         ) : (
-          <p>
-            <ins className="bg-added-soft text-added no-underline">{change.new?.text}</ins>
-          </p>
+          <Row side="new" tone="added" clamp={long && !full}>
+            {change.new?.text}
+          </Row>
         )}
       </div>
+
+      {canExpand && (
+        <button
+          type="button"
+          className="mt-2 rounded-sm text-xs font-medium text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+          onClick={() => setFull(!full)}
+        >
+          {full ? 'Show less' : 'Show full sentence'}
+        </button>
+      )}
     </li>
   )
+}
+
+// One line of a change: an OLD/NEW label, a coloured bar, then the text.
+function Row({
+  side,
+  tone,
+  clamp = false,
+  children,
+}: {
+  side: 'old' | 'new'
+  tone: 'removed' | 'added' | 'neutral'
+  clamp?: boolean
+  children: ReactNode
+}) {
+  const bar = { removed: 'border-danger/50', added: 'border-added/50', neutral: 'border-line-strong' }
+  return (
+    <div className="grid grid-cols-[2.5rem_1fr] items-baseline gap-2">
+      <span className="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">
+        {side}
+      </span>
+      <p className={`border-l-2 pl-3 text-sm leading-relaxed ${bar[tone]} ${clamp ? 'line-clamp-2' : ''}`}>
+        {children}
+      </p>
+    </div>
+  )
+}
+
+// A changed sentence's words: the changed ones marked (struck through on the
+// old side, highlighted on the new), "…" where unchanged words were cut.
+function Words({ words, side }: { words: (Word | null)[]; side: 'old' | 'new' }) {
+  return words.map((word, index) => (
+    // The space after each word stays outside its highlight.
+    <Fragment key={index}>
+      {word === null ? (
+        <span className="text-ink-muted">…</span>
+      ) : !word.changed ? (
+        word.word
+      ) : side === 'old' ? (
+        <del className="rounded-sm bg-danger-soft px-0.5 text-danger">{word.word}</del>
+      ) : (
+        <ins className="rounded-sm bg-added-soft px-0.5 font-medium text-added no-underline">
+          {word.word}
+        </ins>
+      )}{' '}
+    </Fragment>
+  ))
 }
 
 // "Old p. 2 ↗" opening that page of the PDF; a heading tag for a Word file.
