@@ -1,11 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
-import { compareDocuments, comparisonKey } from '../api/compare.ts'
+import { checkConflicts, compareDocuments, comparisonKey } from '../api/compare.ts'
 import type { Change, ChangeKind, Sentence } from '../api/compare.ts'
 import { documentFileUrl, documentsKey, listDocuments } from '../api/documents.ts'
+import type { WorkspaceDocument } from '../api/documents.ts'
+import { Button } from './Button.tsx'
 import { FormError } from './FormError.tsx'
+import { FactsSkeleton } from './KeyFacts.tsx'
 import { Tag } from './PassageResults.tsx'
 
 // A word without capitals or punctuation, so "water." and "WATER!" count as
@@ -232,6 +235,132 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
           </>
         )}
       </div>
+
+      {chosen && (
+        // Keyed by the pair: choosing other documents clears the last check.
+        <PotentialConflicts
+          key={`${oldId} ${newId}`}
+          workspaceId={workspaceId}
+          a={ready.find((document) => document.id === oldId)!}
+          b={ready.find((document) => document.id === newId)!}
+        />
+      )}
+    </div>
+  )
+}
+
+// Statements in the two documents that may contradict each other. Checked on
+// request only: the most alike passages are sent to Google Gemini.
+function PotentialConflicts({
+  workspaceId,
+  a,
+  b,
+}: {
+  workspaceId: string
+  a: WorkspaceDocument
+  b: WorkspaceDocument
+}) {
+  const check = useMutation({ mutationFn: () => checkConflicts(workspaceId, a.id, b.id) })
+  // 404, 409 and 503 (AI unavailable) come with a message for people.
+  // Anything else: the server could not be reached.
+  const errorMessage =
+    check.error instanceof ApiError && [404, 409, 503].includes(check.error.status)
+      ? check.error.message
+      : UNREACHABLE_MESSAGE
+  const result = check.data
+
+  return (
+    <div className="border-t border-line pt-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="max-w-xl">
+          <h3 className="text-sm font-medium">Potential conflicts</h3>
+          <p className="mt-1 text-sm text-ink-muted">
+            Statements in the two documents that may contradict each other, such as different
+            notice periods. The most alike passages are sent to Google Gemini.
+          </p>
+        </div>
+        <Button
+          variant={result ? 'secondary' : 'primary'}
+          loading={check.isPending}
+          onClick={() => check.mutate()}
+        >
+          {check.isPending ? 'Checking…' : result ? 'Check again' : 'Check for conflicts'}
+        </Button>
+      </div>
+
+      <div aria-live="polite">
+        {check.isPending && <FactsSkeleton />}
+        {check.isError && !check.isPending && (
+          <div className="mt-3">
+            <FormError>{errorMessage}</FormError>
+          </div>
+        )}
+        {result && !check.isPending && (
+          <>
+            <p className="mt-3 text-sm text-ink-muted">
+              {result.potential_conflicts.length === 0
+                ? `No potential conflicts in the ${result.checked_pairs} most alike passage pairs.`
+                : `${result.potential_conflicts.length} potential ${
+                    result.potential_conflicts.length === 1 ? 'conflict' : 'conflicts'
+                  } in the ${result.checked_pairs} most alike passage pairs. Check each one: the quotes are real, the conflict is the AI's reading.`}
+            </p>
+            {result.dropped > 0 && (
+              // Honest about what the checks threw away.
+              <p className="mt-1 text-sm text-ink-muted">
+                {result.dropped === 1 ? '1 answer was' : `${result.dropped} answers were`} left
+                out because a quote couldn't be found in its document.
+              </p>
+            )}
+            <ul className="mt-3 space-y-3">
+              {result.potential_conflicts.map((conflict, index) => (
+                <li key={index} className="rounded-sm border border-line bg-surface p-3">
+                  <p className="text-xs font-semibold tracking-wide text-danger uppercase">
+                    Potential conflict
+                    {conflict.topic && (
+                      <span className="font-medium tracking-normal text-ink normal-case">
+                        {' '}
+                        · {conflict.topic}
+                      </span>
+                    )}
+                  </p>
+                  <div className="mt-2 space-y-3">
+                    {(
+                      [
+                        [a, conflict.a],
+                        [b, conflict.b],
+                      ] as const
+                    ).map(([document, side]) => (
+                      <div key={document.id} className="border-l-2 border-line-strong pl-3">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                          <p className="text-sm">
+                            <span className="text-ink-muted">{document.filename}:</span>{' '}
+                            <span className="font-medium">{side.claim}</span>
+                          </p>
+                          <Place
+                            workspaceId={workspaceId}
+                            documentId={document.id}
+                            sentence={side}
+                          />
+                        </div>
+                        {/* The document's own words: the evidence. */}
+                        <blockquote className="mt-1 font-serif text-[14px] leading-relaxed text-ink-muted">
+                          “{side.quote}”
+                        </blockquote>
+                      </div>
+                    ))}
+                  </div>
+                  {conflict.explanation && (
+                    // Gemini's reasoning, marked as such: not evidence.
+                    <p className="mt-3 text-sm text-ink-muted">
+                      <span className="font-medium">AI's reading:</span> {conflict.explanation}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -436,19 +565,21 @@ function Words({ words, side }: { words: (Word | null)[]; side: 'old' | 'new' })
 }
 
 // "Old p. 2 ↗" opening that page of the PDF; a heading tag for a Word file.
+// Without a label: "p. 2 ↗".
 function Place({
   label,
   workspaceId,
   documentId,
   sentence,
 }: {
-  label: string
+  label?: string
   workspaceId: string
   documentId: string
-  sentence: Sentence
+  sentence: Pick<Sentence, 'page_number' | 'heading'>
 }) {
   if (sentence.page_number === null) {
-    return <Tag>{`${label}: ${sentence.heading ?? 'Before the first heading'}`}</Tag>
+    const heading = sentence.heading ?? 'Before the first heading'
+    return <Tag>{label ? `${label}: ${heading}` : heading}</Tag>
   }
   return (
     <a
@@ -457,7 +588,7 @@ function Place({
       rel="noopener"
       className="rounded-sm text-sm font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
     >
-      {label} p. {sentence.page_number} ↗
+      {label && `${label} `}p. {sentence.page_number} ↗
     </a>
   )
 }

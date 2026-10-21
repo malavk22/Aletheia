@@ -30,7 +30,8 @@ function inOrder(kind: FactKind, facts: Fact[]) {
 }
 
 // Grey bars in the shape of facts, shown while Gemini reads the document.
-function FactsSkeleton() {
+// (Also used while potential conflicts are checked.)
+export function FactsSkeleton() {
   return (
     <div aria-hidden="true" className="mt-3 animate-pulse space-y-4">
       {[0, 1, 2].map((row) => (
