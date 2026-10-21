@@ -31,14 +31,24 @@ sentence and its page; the backend keeps a fact only if that sentence really is
 on that page, and dates are checked to be real. Facts are shown by group, with
 repeats shown once. (Tables and custom fields come later.)
 
-**Next — V0.6: comparison.** Comparing documents side by side, with sources.
+**V0.6 — Comparison (done).** **Compare versions** takes two documents of a
+workspace and lists what changed, sentence by sentence and without AI: changed
+(with the changed words marked), removed and added, each with its page in both
+versions; formatting-only changes (spacing, capitals, punctuation) are kept
+apart. **Check for conflicts** pairs the passages of the two documents that are
+closest in meaning and asks Gemini which ones contradict each other; each
+**potential conflict** shows both documents' own sentences and pages, and is kept
+only if both sentences really are in their documents.
+
+**Next — V0.7: action layer.** Deadlines, tasks and a timeline pulled out of
+documents, each with its source, confirmed by a person before it counts.
 
 ## Tech stack
 
 - **Backend:** Python, FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Database:** PostgreSQL + pgvector (vector search), full-text search
 - **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), Tesseract OCR,
-  Google Gemini for answers and key facts (`google-genai`)
+  Google Gemini for answers, key facts and conflict checks (`google-genai`)
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 
 ## Run the backend locally
@@ -87,8 +97,11 @@ to `backend/.env`. Only the question and the few passages chosen to answer it
 are sent; on Gemini's free tier Google may use them to improve its products, so
 use the free tier with test documents only. Key facts also use Gemini and send
 the whole document's text, only when you click "Key facts" on a document not
-extracted before, or "Extract again" (a 50-page report takes about a minute). Without a key
-everything else works; Ask and Key facts show "Couldn't … right now". `LLM_MODEL` and
+extracted before, or "Extract again" (a 50-page report takes about a minute).
+Check for conflicts sends up to 8 pairs of matched passages (about 12,000
+characters), only when you click it; comparing versions never uses Gemini.
+Without a key everything else works; Ask, Key facts and Check for conflicts show
+"Couldn't … right now". `LLM_MODEL` and
 `LLM_FALLBACK_MODEL` choose the models (see `.env.example`).
 
 Tests run in their own database, `aletheia_test`, which is created
