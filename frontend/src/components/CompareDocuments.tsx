@@ -3,7 +3,7 @@ import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { compareDocuments, comparisonKey } from '../api/compare.ts'
-import type { Change, Sentence } from '../api/compare.ts'
+import type { Change, ChangeKind, Sentence } from '../api/compare.ts'
 import { documentFileUrl, documentsKey, listDocuments } from '../api/documents.ts'
 import { FormError } from './FormError.tsx'
 import { Tag } from './PassageResults.tsx'
@@ -56,6 +56,8 @@ function changedWords(before: string, after: string) {
 export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
   const [oldId, setOldId] = useState('')
   const [newId, setNewId] = useState('')
+  // Only this kind of change is listed (a badge was clicked); null: all.
+  const [only, setOnly] = useState<ChangeKind | null>(null)
   const { data: documents } = useQuery({
     queryKey: documentsKey(workspaceId),
     queryFn: () => listDocuments(workspaceId),
@@ -85,6 +87,7 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
       : UNREACHABLE_MESSAGE
   const data = comparison.data
   const meaningful = data?.changes.filter((change) => change.kind !== 'formatting') ?? []
+  const listed = meaningful.filter((change) => only === null || change.kind === only)
   const formatting = data?.changes.filter((change) => change.kind === 'formatting') ?? []
 
   const select =
@@ -92,24 +95,50 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid items-end gap-4 sm:grid-cols-[1fr_auto_1fr]">
         {(
           [
             ['Old version', oldId, setOldId],
             ['New version', newId, setNewId],
           ] as const
-        ).map(([label, value, setValue]) => (
-          <label key={label} className="block text-sm font-medium">
-            {label}
-            <select className={select} value={value} onChange={(event) => setValue(event.target.value)}>
-              <option value="">Choose a document…</option>
-              {ready.map((document) => (
-                <option key={document.id} value={document.id}>
-                  {document.filename}
-                </option>
-              ))}
-            </select>
-          </label>
+        ).map(([label, value, setValue], index) => (
+          <Fragment key={label}>
+            {index === 1 && (
+              // Picked the wrong way round? One click flips old and new.
+              <button
+                type="button"
+                aria-label="Swap old and new version"
+                title="Swap old and new version"
+                className="h-[38px] rounded-sm border border-line-strong bg-surface px-3 text-sm text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+                onClick={() => {
+                  setOldId(newId)
+                  setNewId(oldId)
+                  // Swapping turns removed into added: the filter no longer fits.
+                  setOnly(null)
+                }}
+              >
+                ⇄
+              </button>
+            )}
+            <label className="block text-sm font-medium">
+              {label}
+              <select
+                className={select}
+                value={value}
+                onChange={(event) => {
+                  setValue(event.target.value)
+                  setOnly(null)
+                }}
+              >
+                <option value="">Choose a document…</option>
+                {ready.map((document) => (
+                  <option key={document.id} value={document.id}>
+                    {document.filename}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </Fragment>
         ))}
       </div>
 
@@ -125,21 +154,40 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
             {meaningful.length === 0 ? (
               <p className="text-sm text-ink-muted">No changes in wording.</p>
             ) : (
-              <div className="flex flex-wrap gap-2 text-xs font-medium">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+                {/* Each count is also a filter: click to list only that kind,
+                    click again for all. */}
                 {(['changed', 'removed', 'added'] as const)
                   .filter((kind) => data.counts[kind] > 0)
                   .map((kind) => (
-                    <span key={kind} className={`rounded-sm px-2 py-0.5 ${BADGES[kind]}`}>
+                    <button
+                      key={kind}
+                      type="button"
+                      aria-pressed={only === kind}
+                      className={`rounded-sm px-2 py-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${BADGES[kind]} ${
+                        only === kind ? 'ring-2 ring-current' : only !== null ? 'opacity-50' : ''
+                      }`}
+                      onClick={() => setOnly(only === kind ? null : kind)}
+                    >
                       {data.counts[kind]} {kind}
-                    </span>
+                    </button>
                   ))}
+                {only !== null && (
+                  <button
+                    type="button"
+                    className="rounded-sm px-1 text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+                    onClick={() => setOnly(null)}
+                  >
+                    Show all
+                  </button>
+                )}
               </div>
             )}
-            {meaningful.length > 0 && (
-              // Keyed by the pair: choosing other documents starts again at 5.
+            {listed.length > 0 && (
+              // Keyed by the pair and filter: a new choice starts again at 5.
               <ShowMore
-                key={`${oldId} ${newId}`}
-                items={meaningful}
+                key={`${oldId} ${newId} ${only}`}
+                items={listed}
                 noun="change"
                 render={(change, index) => (
                   <ChangeItem
@@ -279,20 +327,32 @@ function ChangeItem({
   // ones are cut to two lines instead.
   const long = words === null && (change.old ?? change.new)!.text.length > 160
   const canExpand = long || (short !== null && [...short.old, ...short.new].includes(null))
+  // Money, dates, deadlines: a changed word with a digit, or a removed/added
+  // sentence with one, gets a "number" tag so it stands out.
+  const number = words
+    ? [...words.old, ...words.new].some((word) => word.changed && /\d/.test(word.word))
+    : /\d/.test((change.old ?? change.new)!.text)
 
   return (
     <li className="rounded-sm border border-line bg-surface p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span
-          className={`text-xs font-semibold tracking-wide uppercase ${
-            change.kind === 'removed'
-              ? 'text-danger'
-              : change.kind === 'added'
-                ? 'text-added'
-                : 'text-ink-muted'
-          }`}
-        >
-          {LABELS[change.kind]}
+        <span className="flex items-center gap-2">
+          <span
+            className={`text-xs font-semibold tracking-wide uppercase ${
+              change.kind === 'removed'
+                ? 'text-danger'
+                : change.kind === 'added'
+                  ? 'text-added'
+                  : 'text-ink-muted'
+            }`}
+          >
+            {LABELS[change.kind]}
+          </span>
+          {number && (
+            <span className="rounded-sm border border-line-strong px-1.5 text-[11px] font-medium text-ink">
+              number
+            </span>
+          )}
         </span>
         {/* Where the sentence is in each version: the provenance of the change. */}
         <span className="flex flex-wrap gap-3">
