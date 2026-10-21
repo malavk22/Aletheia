@@ -136,8 +136,12 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
               </div>
             )}
             {meaningful.length > 0 && (
-              <ul className="mt-3 space-y-3">
-                {meaningful.map((change, index) => (
+              // Keyed by the pair: choosing other documents starts again at 5.
+              <ShowMore
+                key={`${oldId} ${newId}`}
+                items={meaningful}
+                noun="change"
+                render={(change, index) => (
                   <ChangeItem
                     key={index}
                     workspaceId={workspaceId}
@@ -145,8 +149,8 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
                     newId={newId}
                     change={change}
                   />
-                ))}
-              </ul>
+                )}
+              />
             )}
             {formatting.length > 0 && (
               // Kept apart and closed: re-typed text shouldn't hide real changes.
@@ -157,8 +161,11 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
                     : `${formatting.length} formatting-only changes`}{' '}
                   (spacing, capitals or punctuation)
                 </summary>
-                <ul className="mt-3 space-y-3">
-                  {formatting.map((change, index) => (
+                <ShowMore
+                  key={`${oldId} ${newId}`}
+                  items={formatting}
+                  noun="change"
+                  render={(change, index) => (
                     <li key={index} className="space-y-1.5 rounded-sm border border-line bg-surface p-3">
                       <Row side="old" tone="neutral">
                         {change.old?.text}
@@ -167,14 +174,56 @@ export function CompareDocuments({ workspaceId }: { workspaceId: string }) {
                         {change.new?.text}
                       </Row>
                     </li>
-                  ))}
-                </ul>
+                  )}
+                />
               </details>
             )}
           </>
         )}
       </div>
     </div>
+  )
+}
+
+// How many changes are shown at first, and added by each "Show more".
+const PAGE = 5
+
+// A long list shown PAGE items at a time, so a big comparison doesn't mean
+// endless scrolling.
+function ShowMore<T>({
+  items,
+  noun,
+  render,
+}: {
+  items: T[]
+  noun: string
+  render: (item: T, index: number) => ReactNode
+}) {
+  const [count, setCount] = useState(PAGE)
+  const left = items.length - count
+  const next = Math.min(PAGE, left)
+  const button =
+    'rounded-sm text-sm font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent'
+
+  return (
+    <>
+      <ul className="mt-3 space-y-3">{items.slice(0, count).map(render)}</ul>
+      {(left > 0 || count > PAGE) && (
+        <div className="mt-3 flex flex-wrap gap-4">
+          {left > 0 && (
+            <button type="button" className={button} onClick={() => setCount(count + PAGE)}>
+              Show {next} more {next === 1 ? noun : `${noun}s`} ({left} left)
+            </button>
+          )}
+          {/* Once more are shown, back to the first PAGE at any time. */}
+          {count > PAGE && (
+            <button type="button" className={button} onClick={() => setCount(PAGE)}>
+              Show less
+            </button>
+          )}
+        </div>
+      )}
+    </>
   )
 }
 
