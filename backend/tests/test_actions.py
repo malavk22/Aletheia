@@ -11,7 +11,7 @@ from test_facts import fake_gemini_json, item, lease  # noqa: F401 (fake_gemini_
 from app.models.document import Document, DocumentAction, DocumentFact, DocumentPart
 from app.models.user import User
 from app.qa import llm
-from app.services.actions import _stated, extract_actions
+from app.services.actions import INSTRUCTIONS, _stated, extract_actions
 
 
 def action(document_id, **fields):
@@ -509,3 +509,11 @@ def test_the_prompt_numbers_the_parts_and_forbids_working_out_dates(
 )
 def test_a_date_counts_only_if_the_text_writes_it_in_full(text, day, stated):
     assert _stated(day, text) is stated
+
+
+def test_the_prompt_is_for_any_kind_of_document():
+    # Not tied to contracts: it names other kinds of documents, and it says
+    # what is NOT an action, such as a feature a system must have.
+    for words in ("meeting notes", "syllabus", "invoice", "may", "already done", "feature"):
+        assert words in INSTRUCTIONS
+    assert "tenant" not in INSTRUCTIONS
