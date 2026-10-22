@@ -37,6 +37,11 @@ Not an action:
 - a description of what a product, system or software does or must do
   ("The system shall let users filter results"): that is a feature, not a
   person's to-do;
+- the steps of a plan, method or process that the document describes
+  ("Build in stages, then test each stage"), unless it asks the reader
+  to do them;
+- a description of a role or job ("The developer designs and builds
+  the system"): that is who does what, not a to-do;
 - a plain fact or a general statement ("The fee is 500 dollars").
 
 The document is given as numbered parts, like "[part 3] (p. 3)". For each

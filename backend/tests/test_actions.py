@@ -513,7 +513,11 @@ def test_a_date_counts_only_if_the_text_writes_it_in_full(text, day, stated):
 
 def test_the_prompt_is_for_any_kind_of_document():
     # Not tied to contracts: it names other kinds of documents, and it says
-    # what is NOT an action, such as a feature a system must have.
-    for words in ("meeting notes", "syllabus", "invoice", "may", "already done", "feature"):
+    # what is NOT an action, such as a feature a system must have, the steps
+    # of a plan a report describes, or a role's description.
+    for words in (
+        "meeting notes", "syllabus", "invoice", "may", "already done", "feature",
+        "steps of a plan", "unless it asks the reader", "a role or job",
+    ):
         assert words in INSTRUCTIONS
     assert "tenant" not in INSTRUCTIONS
