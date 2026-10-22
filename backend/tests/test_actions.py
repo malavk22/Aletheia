@@ -1,13 +1,17 @@
+import uuid
 from datetime import date, datetime, timezone
 
 import pytest
+from pdfs import make_pdf
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from test_documents import document_url
+from test_documents import document_url, upload, workspace_for
 from test_facts import fake_gemini_json, item, lease  # noqa: F401 (fake_gemini_json is a fixture)
 
-from app.models.document import DocumentAction, DocumentFact
+from app.models.document import Document, DocumentAction, DocumentFact, DocumentPart
 from app.models.user import User
+from app.qa import llm
+from app.services.actions import _stated, extract_actions
 
 
 def action(document_id, **fields):
@@ -186,3 +190,322 @@ def test_extracting_key_facts_leaves_actions_alone(client, db, fake_gemini_json)
 
     assert len(db.scalars(select(DocumentFact)).all()) == 1
     assert len(db.scalars(select(DocumentAction)).all()) == 1
+
+
+# extract_actions, with a fake Gemini: these tests check what is kept and how
+# dates and confidence are decided, never the real model.
+
+CONTRACT = (
+    "Payment of 2,000 dollars is due on 15 March 2026. "
+    "The tenant must give notice within 30 days of 1 January 2026. "
+    "The report is due by 03/04/2026. The inspection is on 15/03/2026.",
+    "The tenant must keep the garden tidy. The deposit must be paid by 15 March.",
+)
+PAYMENT = "Payment of 2,000 dollars is due on 15 March 2026."
+NOTICE = "The tenant must give notice within 30 days of 1 January 2026."
+GARDEN = "The tenant must keep the garden tidy."
+DEPOSIT = "The deposit must be paid by 15 March."
+
+
+def contract(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    document_id = upload(client, workspace_id, "contract.pdf", make_pdf(*CONTRACT)).json()["id"]
+    return db.get(Document, uuid.UUID(document_id))
+
+
+def found(**fields):
+    """An action as Gemini would give it: the payment deadline, unless told otherwise."""
+    return {
+        "kind": "deadline",
+        "title": "Pay 2,000 dollars",
+        "responsible": "the tenant",
+        "due_text": "on 15 March 2026",
+        "due_date": "2026-03-15",
+        "quote": PAYMENT,
+        "part": 1,
+        **fields,
+    }
+
+
+def stored_actions(db, document):
+    return db.scalars(
+        select(DocumentAction)
+        .where(DocumentAction.document_id == document.id)
+        .order_by(DocumentAction.title)
+    ).all()
+
+
+def only(db, document):
+    [stored] = stored_actions(db, document)
+    return stored
+
+
+def test_a_full_date_written_in_the_document_makes_an_exact_deadline(
+    client, db, fake_gemini_json
+):
+    document = contract(client, db)
+    fake_gemini_json({"actions": [found()]})
+
+    result = extract_actions(db, document)
+
+    stored = only(db, document)
+    assert result == {"kept": 1, "dropped": 0}
+    assert (stored.due_kind, stored.due_date, stored.due_date_source) == (
+        "exact",
+        date(2026, 3, 15),
+        "document",
+    )
+    assert (stored.due_text, stored.confidence, stored.status) == (
+        "on 15 March 2026",
+        "high",
+        "suggested",
+    )
+    assert (stored.quote, stored.part_position, stored.responsible) == (PAYMENT, 1, "the tenant")
+    assert document.actions_extracted_at is not None
+
+
+@pytest.mark.parametrize(
+    "due_date",
+    [
+        # Worked out from the period: not written in the document.
+        "2026-01-31",
+        # The date that is written is the start of the period, not the deadline.
+        "2026-01-01",
+    ],
+)
+def test_a_period_never_gets_a_date(client, db, fake_gemini_json, due_date):
+    document = contract(client, db)
+    fake_gemini_json(
+        {
+            "actions": [
+                found(
+                    title="Give notice",
+                    due_text="within 30 days of 1 January 2026",
+                    due_date=due_date,
+                    quote=NOTICE,
+                )
+            ]
+        }
+    )
+
+    extract_actions(db, document)
+
+    stored = only(db, document)
+    assert (stored.due_kind, stored.due_date, stored.due_date_source) == ("relative", None, None)
+    assert stored.due_text == "within 30 days of 1 January 2026"
+    # Gemini gave a date the document doesn't support: a warning sign.
+    assert stored.confidence == "low"
+
+
+def test_a_missing_year_is_never_guessed(client, db, fake_gemini_json):
+    document = contract(client, db)
+    fake_gemini_json(
+        {
+            "actions": [
+                found(
+                    title="Pay the deposit",
+                    due_text="by 15 March",
+                    due_date="2026-03-15",
+                    quote=DEPOSIT,
+                    part=2,
+                )
+            ]
+        }
+    )
+
+    extract_actions(db, document)
+
+    stored = only(db, document)
+    assert (stored.due_kind, stored.due_date, stored.confidence) == ("relative", None, "low")
+
+
+@pytest.mark.parametrize(
+    "due_text, due_date, quote, exact",
+    [
+        # 03/04 could be 3 April or 4 March: choosing would be a guess.
+        ("by 03/04/2026", "2026-04-03", "The report is due by 03/04/2026.", False),
+        # 15 can't be a month, so 15/03/2026 is 15 March.
+        ("on 15/03/2026", "2026-03-15", "The inspection is on 15/03/2026.", True),
+    ],
+)
+def test_a_numeric_date_is_exact_only_when_it_cant_be_misread(
+    client, db, fake_gemini_json, due_text, due_date, quote, exact
+):
+    document = contract(client, db)
+    fake_gemini_json({"actions": [found(due_text=due_text, due_date=due_date, quote=quote)]})
+
+    extract_actions(db, document)
+
+    stored = only(db, document)
+    assert (stored.due_kind == "exact", stored.due_date is not None) == (exact, exact)
+
+
+def test_an_action_without_a_time_has_no_deadline(client, db, fake_gemini_json):
+    document = contract(client, db)
+    fake_gemini_json(
+        {
+            "actions": [
+                found(
+                    kind="task",
+                    title="Keep the garden tidy",
+                    responsible="",
+                    due_text="",
+                    due_date="",
+                    quote=GARDEN,
+                    part=2,
+                )
+            ]
+        }
+    )
+
+    extract_actions(db, document)
+
+    stored = only(db, document)
+    assert (stored.due_kind, stored.due_text, stored.due_date) == ("none", None, None)
+    assert (stored.confidence, stored.responsible) == ("medium", None)
+
+
+def test_a_relative_deadline_without_a_suggested_date_is_medium(client, db, fake_gemini_json):
+    document = contract(client, db)
+    fake_gemini_json(
+        {
+            "actions": [
+                found(
+                    title="Give notice",
+                    due_text="within 30 days of 1 January 2026",
+                    due_date="",
+                    quote=NOTICE,
+                )
+            ]
+        }
+    )
+
+    extract_actions(db, document)
+
+    stored = only(db, document)
+    assert (stored.due_kind, stored.confidence) == ("relative", "medium")
+
+
+def test_text_read_by_ocr_is_low_confidence(client, db, fake_gemini_json):
+    document = contract(client, db)
+    db.get(DocumentPart, (document.id, 1)).source = "ocr"
+    fake_gemini_json({"actions": [found()]})
+
+    extract_actions(db, document)
+
+    # Still exact (the date is written there), but the text may be misread.
+    stored = only(db, document)
+    assert (stored.due_kind, stored.confidence) == ("exact", "low")
+
+
+def test_an_action_is_dropped_unless_its_evidence_checks_out(client, db, fake_gemini_json):
+    document = contract(client, db)
+    fake_gemini_json(
+        {
+            "actions": [
+                # Each wrong one has its own title, so only its own check can
+                # stop it (not the duplicate check).
+                found(title="Wrong page", part=2),  # the quote is on page 1, not 2
+                found(title="Made up", quote="Payment is due on 1 April 2026."),
+                found(title="Wrong when", due_text="on 20 March 2026"),  # not in the quote
+                found(title="Wrong kind", kind="reminder"),
+                found(title=""),
+                found(title="Bool part", part=True),  # True is not part 1
+                found(title="No part", part=9),
+                found(),  # the real one, given twice:
+                found(title="pay 2,000 DOLLARS"),  # kept once
+            ]
+        }
+    )
+
+    result = extract_actions(db, document)
+
+    assert result == {"kept": 1, "dropped": 8}
+    assert only(db, document).title == "Pay 2,000 dollars"
+
+
+def test_extracting_again_keeps_what_a_person_decided(client, db, fake_gemini_json):
+    document = contract(client, db)
+    garden = {"kind": "task", "due_text": "", "due_date": "", "quote": GARDEN, "part": 2}
+    notice = {"due_text": "within 30 days of 1 January 2026", "due_date": "", "quote": NOTICE}
+    fake_gemini_json(
+        {
+            "actions": [
+                found(),
+                found(title="Keep the garden tidy", **garden),
+                found(title="Give notice", **notice),
+            ]
+        },
+        # The second run finds all three again, worded a little differently.
+        {
+            "actions": [
+                found(title="Make the payment"),
+                found(title="Tidy the garden", **garden),
+                found(title="Notify the landlord", **notice),
+            ]
+        },
+    )
+    extract_actions(db, document)
+    by_title = {action.title: action for action in stored_actions(db, document)}
+    by_title["Pay 2,000 dollars"].status = "confirmed"
+    by_title["Pay 2,000 dollars"].confirmed_at = datetime.now(timezone.utc)
+    by_title["Keep the garden tidy"].status = "dismissed"
+    db.flush()
+
+    extract_actions(db, document)
+
+    # The confirmed and dismissed actions stay as they were and aren't
+    # suggested again; the one suggestion is replaced by the new wording.
+    assert [(action.title, action.status) for action in stored_actions(db, document)] == [
+        ("Keep the garden tidy", "dismissed"),
+        ("Notify the landlord", "suggested"),
+        ("Pay 2,000 dollars", "confirmed"),
+    ]
+
+
+def test_when_gemini_fails_nothing_changes(client, db, fake_gemini_json):
+    document = contract(client, db)
+    fake_gemini_json({"actions": [found()]}, llm.LLMError("Gemini could not answer: 503"))
+    extract_actions(db, document)
+    first_time = document.actions_extracted_at
+
+    with pytest.raises(llm.LLMError):
+        extract_actions(db, document)
+
+    assert len(stored_actions(db, document)) == 1
+    assert document.actions_extracted_at == first_time
+
+
+def test_the_prompt_numbers_the_parts_and_forbids_working_out_dates(
+    client, db, fake_gemini_json
+):
+    document = contract(client, db)
+    calls = fake_gemini_json({"actions": []})
+
+    extract_actions(db, document)
+
+    assert "[part 1] (p. 1)" in calls[0]["prompt"]
+    assert "[part 2] (p. 2)" in calls[0]["prompt"]
+    assert "Never work out a date" in calls[0]["instructions"]
+    # Extracted, none found: different from never extracted.
+    assert document.actions_extracted_at is not None
+
+
+@pytest.mark.parametrize(
+    "text, day, stated",
+    [
+        ("on 15 March 2026", date(2026, 3, 15), True),
+        ("by Mar 15, 2026", date(2026, 3, 15), True),
+        ("before 15 Sept 2026", date(2026, 9, 15), True),
+        ("on 2026-03-15", date(2026, 3, 15), True),
+        ("on 15/03/2026", date(2026, 3, 15), True),
+        ("on 03/03/2026", date(2026, 3, 3), True),  # the same either way round
+        ("by 03/04/2026", date(2026, 4, 3), False),  # 3 April or 4 March?
+        ("by 15 March", date(2026, 3, 15), False),  # no year
+        ("on 15 March 2026", date(2026, 3, 16), False),  # another day
+        ("on 15 March 2026", date(2026, 4, 15), False),  # another month
+        ("on 15 March 2025", date(2026, 3, 15), False),  # another year
+    ],
+)
+def test_a_date_counts_only_if_the_text_writes_it_in_full(text, day, stated):
+    assert _stated(day, text) is stated

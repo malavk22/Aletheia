@@ -50,6 +50,8 @@ class Document(Base):
     # When key facts were last extracted (V0.5). Empty: never, which is
     # different from "extracted, none found".
     facts_extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When actions were last extracted (V0.7). Empty: never.
+    actions_extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
