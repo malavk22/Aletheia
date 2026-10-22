@@ -21,6 +21,8 @@ class DocumentRead(BaseModel):
     created_at: datetime
     # When key facts were last extracted; empty if never.
     facts_extracted_at: datetime | None
+    # When actions were last found; empty if never.
+    actions_extracted_at: datetime | None
 
 
 class DocumentPartRead(BaseModel):
