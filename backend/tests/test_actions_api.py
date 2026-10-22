@@ -230,3 +230,14 @@ def test_other_users_and_other_workspaces_cant_reach_actions(client, db, fake_ge
     assert client.get(actions_url(document)).status_code == 401
     assert len(calls) == calls_before
     assert db.get(DocumentAction, action_id).status == "suggested"
+
+
+def test_the_document_list_says_whether_actions_were_found(client, db, fake_gemini_json):
+    # The page uses this to find actions on the first click only.
+    document = contract(client, db)
+    list_url = f"/api/v1/workspaces/{document.workspace_id}/documents"
+    fake_gemini_json({"actions": []})
+
+    assert client.get(list_url).json()[0]["actions_extracted_at"] is None
+    client.post(actions_url(document))
+    assert client.get(list_url).json()[0]["actions_extracted_at"] is not None
