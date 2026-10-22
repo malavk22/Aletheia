@@ -8,8 +8,10 @@ import {
   listDocuments,
 } from '../api/documents.ts'
 import type { WorkspaceDocument } from '../api/documents.ts'
+import { findActionsKey } from '../api/actions.ts'
 import { extractFactsKey } from '../api/facts.ts'
 import { Button } from './Button.tsx'
+import { DocumentActions } from './DocumentActions.tsx'
 import { DocumentDetails } from './DocumentDetails.tsx'
 import { KeyFacts } from './KeyFacts.tsx'
 import { FormError } from './FormError.tsx'
@@ -68,10 +70,11 @@ function DocumentRow({
   const queryClient = useQueryClient()
   // Deleting takes two clicks: "Delete", then "Confirm delete".
   const [confirming, setConfirming] = useState(false)
-  // The key facts panel, opened below the row.
-  const [showFacts, setShowFacts] = useState(false)
-  // True while this document's key facts are being extracted (in the panel).
+  // The panel opened below the row: one at a time keeps the list short.
+  const [panel, setPanel] = useState<'facts' | 'actions' | null>(null)
+  // True while this document's key facts / actions are being found (in the panel).
   const extracting = useIsMutating({ mutationKey: extractFactsKey(document.id) }) > 0
+  const finding = useIsMutating({ mutationKey: findActionsKey(document.id) }) > 0
   const mutation = useMutation({
     mutationFn: () => deleteDocument(workspaceId, document.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) }),
@@ -121,22 +124,24 @@ function DocumentRow({
             </>
           ) : (
             <>
-              {/* Facts come from the extracted text, so only once it is ready. */}
+              {/* Facts and actions come from the extracted text, so only once it is ready. */}
               {document.status === 'ready' && (
-                <button
-                  type="button"
-                  aria-expanded={showFacts}
-                  className={`${textButton} inline-flex items-center gap-1.5 ${showFacts ? 'text-accent' : 'text-ink-muted hover:text-ink'}`}
-                  onClick={() => setShowFacts(!showFacts)}
-                >
-                  {extracting && (
-                    <span
-                      aria-hidden="true"
-                      className="size-3 animate-spin rounded-full border-2 border-current border-r-transparent"
-                    />
-                  )}
-                  {extracting ? 'Extracting key facts…' : 'Key facts'}
-                </button>
+                <>
+                  <PanelButton
+                    open={panel === 'facts'}
+                    busy={extracting}
+                    label="Key facts"
+                    busyLabel="Extracting key facts…"
+                    onClick={() => setPanel(panel === 'facts' ? null : 'facts')}
+                  />
+                  <PanelButton
+                    open={panel === 'actions'}
+                    busy={finding}
+                    label="Actions"
+                    busyLabel="Finding actions…"
+                    onClick={() => setPanel(panel === 'actions' ? null : 'actions')}
+                  />
+                </>
               )}
               <button
                 type="button"
@@ -150,7 +155,7 @@ function DocumentRow({
           )}
         </div>
       </div>
-      {showFacts && document.status === 'ready' && (
+      {panel === 'facts' && document.status === 'ready' && (
         <KeyFacts
           workspaceId={workspaceId}
           documentId={document.id}
@@ -158,6 +163,47 @@ function DocumentRow({
           extractOnOpen={document.facts_extracted_at === null}
         />
       )}
+      {panel === 'actions' && document.status === 'ready' && (
+        <DocumentActions
+          workspaceId={workspaceId}
+          documentId={document.id}
+          // First open of a never-searched document: one click searches.
+          findOnOpen={document.actions_extracted_at === null}
+        />
+      )}
     </li>
+  )
+}
+
+// "Key facts" / "Actions": opens its panel; while the AI works, a spinner and
+// what it is doing.
+function PanelButton({
+  open,
+  busy,
+  label,
+  busyLabel,
+  onClick,
+}: {
+  open: boolean
+  busy: boolean
+  label: string
+  busyLabel: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      className={`inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-accent ${open ? 'text-accent' : 'text-ink-muted hover:text-ink'}`}
+      onClick={onClick}
+    >
+      {busy && (
+        <span
+          aria-hidden="true"
+          className="size-3 animate-spin rounded-full border-2 border-current border-r-transparent"
+        />
+      )}
+      {busy ? busyLabel : label}
+    </button>
   )
 }

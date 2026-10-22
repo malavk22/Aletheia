@@ -18,6 +18,8 @@ export type WorkspaceDocument = {
   created_at: string
   // When key facts were last extracted; null if never.
   facts_extracted_at: string | null
+  // When actions were last found; null if never.
+  actions_extracted_at: string | null
 }
 
 export function documentsKey(workspaceId: string) {
