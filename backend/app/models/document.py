@@ -1,8 +1,10 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
+    CheckConstraint,
     Computed,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -158,3 +160,89 @@ class DocumentFact(Base):
     quote: Mapped[str] = mapped_column(Text)
     # Which part (page or section) the quote is in.
     part_position: Mapped[int]
+
+
+class DocumentAction(Base):
+    """Something someone must do, found in a document by the AI (V0.7): a
+    deadline or a task, with the exact sentence it came from and that
+    sentence's page or section.
+
+    Kept apart from facts: facts are read-only and replaced on every
+    extraction, while actions are confirmed, edited or dismissed by a person.
+    An action starts as a suggestion and only counts once a person confirms it.
+
+    The rules below are checked by the database itself, so no code path can
+    break them, above all: a due date never comes from the document unless
+    the document gives a full date.
+    """
+
+    __tablename__ = "document_actions"
+    __table_args__ = (
+        # The action's part, found by (document, part position). Deleting the
+        # part (or its document) deletes its actions.
+        ForeignKeyConstraint(
+            ["document_id", "part_position"],
+            ["document_parts.document_id", "document_parts.position"],
+            ondelete="CASCADE",
+        ),
+        # A document's actions are read (and deleted) together.
+        Index("ix_document_actions_document_id", "document_id"),
+        CheckConstraint("kind IN ('deadline', 'task')", name="ck_actions_kind"),
+        CheckConstraint("due_kind IN ('exact', 'relative', 'none')", name="ck_actions_due_kind"),
+        CheckConstraint("confidence IN ('high', 'medium', 'low')", name="ck_actions_confidence"),
+        CheckConstraint("status IN ('suggested', 'confirmed', 'dismissed')", name="ck_actions_status"),
+        # A date always says where it came from, and a source always has a date.
+        CheckConstraint(
+            "(due_date IS NULL) = (due_date_source IS NULL)", name="ck_actions_due_date_has_source"
+        ),
+        # Never an invented date: the document only gives a date when it
+        # states one in full. A relative deadline gets a date from a person.
+        CheckConstraint(
+            "due_date_source <> 'document' OR due_kind = 'exact'", name="ck_actions_document_date_is_exact"
+        ),
+        CheckConstraint("due_kind <> 'exact' OR due_date IS NOT NULL", name="ck_actions_exact_has_date"),
+        # A deadline as written ("by 15 March 2026", "within 30 days of
+        # leaving") is kept whenever there is one.
+        CheckConstraint("due_kind = 'none' OR due_text IS NOT NULL", name="ck_actions_due_has_text"),
+        CheckConstraint(
+            "(status = 'confirmed') = (confirmed_at IS NOT NULL)", name="ck_actions_confirmed_has_time"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID]
+    # Which part (page or section) the quote is in.
+    part_position: Mapped[int]
+    # deadline (something due by a time) or task (something to do).
+    kind: Mapped[str] = mapped_column(String(20))
+    # What has to be done, in short: "Give notice before leaving".
+    title: Mapped[str] = mapped_column(Text)
+    # Who has to do it, as the document says: "the tenant". Empty if not said.
+    responsible: Mapped[str | None] = mapped_column(Text)
+    # What the document says about when:
+    # exact: a full date ("15 March 2026"); relative: tied to something else
+    # or incomplete ("within 30 days of leaving", "by 15 March"); none.
+    due_kind: Mapped[str] = mapped_column(String(10))
+    # The "when" in the document's own words. Empty for "none".
+    due_text: Mapped[str | None] = mapped_column(Text)
+    # The due date, if known; empty for relative deadlines until a person
+    # sets one.
+    due_date: Mapped[date | None] = mapped_column(Date)
+    # Where the date came from: "document" (exact deadlines only) or "person".
+    due_date_source: Mapped[str | None] = mapped_column(String(10))
+    # The document's own words the action comes from, as found in the part.
+    quote: Mapped[str] = mapped_column(Text)
+    # How much to trust the suggestion: high, medium or low, worked out by
+    # rules from the evidence, not asked from the AI.
+    confidence: Mapped[str] = mapped_column(String(10))
+    # suggested (found by the AI, not yet counted), confirmed or dismissed.
+    status: Mapped[str] = mapped_column(String(20), server_default="suggested")
+    # When and by whom it was confirmed. The person is kept as empty if
+    # their account is deleted.
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
