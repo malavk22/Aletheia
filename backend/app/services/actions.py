@@ -1,4 +1,5 @@
 import re
+import uuid
 from datetime import date, datetime, timezone
 
 from sqlalchemy import delete, select
@@ -200,3 +201,113 @@ def _stated(day: date, text: str) -> bool:
         return True
     ambiguous = day.day <= 12 and day.day != day.month
     return day.month in numbers and not ambiguous
+
+
+STATUSES = ("suggested", "confirmed", "dismissed")
+
+
+def list_actions(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID | None = None,
+    document_id: uuid.UUID | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    """Actions of one document or of a whole workspace, each with its
+    document's name and its part's page or heading. Dated ones first, by
+    date; then the rest in document and reading order."""
+    query = (
+        select(
+            DocumentAction,
+            Document.filename,
+            DocumentPart.page_number,
+            DocumentPart.heading,
+            DocumentPart.source,
+        )
+        .join(Document, Document.id == DocumentAction.document_id)
+        .join(
+            DocumentPart,
+            (DocumentPart.document_id == DocumentAction.document_id)
+            & (DocumentPart.position == DocumentAction.part_position),
+        )
+        .order_by(
+            DocumentAction.due_date.asc().nulls_last(),
+            Document.filename,
+            DocumentAction.part_position,
+            DocumentAction.title,
+        )
+    )
+    if workspace_id is not None:
+        query = query.where(Document.workspace_id == workspace_id)
+    if document_id is not None:
+        query = query.where(DocumentAction.document_id == document_id)
+    if status is not None:
+        query = query.where(DocumentAction.status == status)
+    return [
+        _read(action, filename, page_number, heading, source)
+        for action, filename, page_number, heading, source in db.execute(query)
+    ]
+
+
+def get_action(db: Session, workspace_id: uuid.UUID, action_id: uuid.UUID) -> DocumentAction | None:
+    """The action, if its document is in this workspace."""
+    return db.scalar(
+        select(DocumentAction)
+        .join(Document, Document.id == DocumentAction.document_id)
+        .where(DocumentAction.id == action_id, Document.workspace_id == workspace_id)
+    )
+
+
+def update_action(db: Session, action: DocumentAction, user_id: uuid.UUID, changes: dict) -> None:
+    """Apply a person's decision. `changes` holds only the fields they sent:
+    status, title and/or due_date (None clears a date). Raises ValueError
+    with a message for people if a change isn't allowed. What the document
+    says (due_kind, due_text, quote) is never changed."""
+    if "title" in changes:
+        title = _text(changes["title"])
+        if not title:
+            raise ValueError("The title can't be empty")
+        action.title = title
+    if "due_date" in changes:
+        if changes["due_date"] is None:
+            if action.due_kind == "exact":
+                raise ValueError("An exact deadline keeps a date; change it instead")
+            action.due_date, action.due_date_source = None, None
+        else:
+            # A date a person sets is marked as theirs, even on an exact
+            # deadline: the document's date and theirs are never confused.
+            action.due_date, action.due_date_source = changes["due_date"], "person"
+    if "status" in changes:
+        status = changes["status"]
+        if status not in STATUSES:
+            raise ValueError("Unknown status")
+        action.status = status
+        if status == "confirmed":
+            action.confirmed_at = datetime.now(timezone.utc)
+            action.confirmed_by = user_id
+        else:
+            action.confirmed_at, action.confirmed_by = None, None
+    db.commit()
+
+
+def _read(action: DocumentAction, filename, page_number, heading, source) -> dict:
+    return {
+        "id": action.id,
+        "document_id": action.document_id,
+        "filename": filename,
+        "kind": action.kind,
+        "title": action.title,
+        "responsible": action.responsible,
+        "due_kind": action.due_kind,
+        "due_text": action.due_text,
+        "due_date": action.due_date,
+        "due_date_source": action.due_date_source,
+        "quote": action.quote,
+        "confidence": action.confidence,
+        "status": action.status,
+        "confirmed_at": action.confirmed_at,
+        "part_position": action.part_position,
+        "page_number": page_number,
+        "heading": heading,
+        "source": source,
+    }
