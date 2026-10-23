@@ -77,6 +77,11 @@ export function findActions(workspaceId: string, documentId: string) {
   return api<DocumentActions>(documentActionsPath(workspaceId, documentId), { method: 'POST' })
 }
 
+// Every document's actions with this status, dated ones first, by date.
+export function listWorkspaceActions(workspaceId: string, status: ActionStatus) {
+  return api<Action[]>(`/workspaces/${workspaceId}/actions?status=${status}`)
+}
+
 export function updateAction(workspaceId: string, actionId: string, change: ActionChange) {
   return api<Action>(`/workspaces/${workspaceId}/actions/${actionId}`, {
     method: 'PATCH',
