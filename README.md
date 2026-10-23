@@ -49,7 +49,8 @@ relative deadline gets a date only from a person, marked as theirs. Confidence
 comes from rules on the evidence. Every action is a suggestion until a person
 confirms it; confirmed actions of the whole workspace are listed as
 **Upcoming** (overdue and the next 14 days), **Timeline** (by month) and **No
-fixed date**. Reminders are shown in the app only (no email or phone).
+fixed date**. A finished action is marked **done**: it leaves Upcoming and stays
+in the Timeline. Reminders are shown in the app only (no email or phone).
 
 **Next — V0.8: advanced RAG.** Hybrid retrieval, reranking, section filters and
 questions across several documents.
