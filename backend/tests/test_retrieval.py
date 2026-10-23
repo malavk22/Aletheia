@@ -24,10 +24,11 @@ from retrieval_set import DOCUMENTS, OTHER_WORKSPACE, QUESTIONS
 from test_documents import upload, workspace_for
 from test_qa import workspace
 
-from app.documents import embeddings
+from app.documents import embeddings, reranking
 
-# Imported before the fake_embeddings fixture replaces them: the real model.
+# Imported before the fake fixtures replace them: the real models.
 from app.documents.embeddings import embed_passages, embed_query
+from app.documents.reranking import relevance
 from app.services.qa import PASSAGES, _find_passages
 
 # Recorded on 2026-10-23 with the V0.7 retrieval (rare words first, then
@@ -40,16 +41,19 @@ BASELINE = {"recall@6": 0.881, "recall@3": 0.726, "MRR": 0.668}
 # not fall below.
 # Step 2, rank fusion of rare words and meaning (20 candidates each):
 # recall@6 0.893, recall@3 0.857, MRR 0.764; median 72 ms a question.
-# Step 2b, rare words taken as PostgreSQL stores them ("192.168.8.1" whole),
-# below. By kind, recall@6: words 0.9, reworded 0.923, names 1.0, parts
-# 0.944; median 44 ms.
-KEPT = {"recall@6": 0.94, "recall@3": 0.905, "MRR": 0.81}
+# Step 2b, rare words taken as PostgreSQL stores them ("192.168.8.1" whole):
+# recall@6 0.94, recall@3 0.905, MRR 0.81; median 44 ms.
+# Step 3, a local reranker reads the 20 best fused passages, below. By kind,
+# recall@6 1.0 for all; hit@1 0.905; median 1,087 ms a question (the
+# reranker is about 50 ms a passage on a 4-core CPU).
+KEPT = {"recall@6": 1.0, "recall@3": 0.988, "MRR": 0.952}
 
 
 @pytest.fixture
 def real_embeddings(monkeypatch):
     monkeypatch.setattr(embeddings, "embed_passages", embed_passages)
     monkeypatch.setattr(embeddings, "embed_query", embed_query)
+    monkeypatch.setattr(reranking, "relevance", relevance)
 
 
 def pdf(pages: list[str]) -> bytes:
