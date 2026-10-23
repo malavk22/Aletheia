@@ -3,6 +3,7 @@ import re
 from sqlalchemy.orm import Session
 
 from app.models.workspace import Workspace
+from app.documents import reranking
 from app.qa import llm
 from app.services.search import rare_word_search, semantic_search
 
@@ -17,6 +18,9 @@ CANDIDATES = 20
 # list, added up. 60 is the usual value (Cormack et al., 2009): large enough
 # that being first in one list doesn't outweigh being high in both.
 RRF_K = 60
+# How many of the fused passages the reranker reads before the best
+# PASSAGES are kept.
+RERANK = 20
 
 NOT_FOUND = "The documents in this workspace don't answer this question."
 
@@ -59,10 +63,17 @@ def answer_question(db: Session, workspace: Workspace, question: str) -> dict:
 def _find_passages(db: Session, workspace: Workspace, question: str) -> list[dict]:
     """The PASSAGES chunks the model reads: the question's rare words (they
     name what is asked about) and its meaning (it catches other wording)
-    each rank the passages, and the two rankings are fused."""
+    each rank the passages, the two rankings are fused, and a reranker reads
+    the best of them with the question to pick the final ones."""
     by_words = rare_word_search(db, workspace, question, limit=CANDIDATES)
     by_meaning = semantic_search(db, workspace, question, limit=CANDIDATES)
-    return _fuse(by_words, by_meaning)[:PASSAGES]
+    fused = _fuse(by_words, by_meaning)[:RERANK]
+    if not fused:
+        return []
+    scores = reranking.relevance(question, [passage["text"] for passage in fused])
+    # sorted() keeps the fused order for equal scores.
+    order = sorted(range(len(fused)), key=lambda index: -scores[index])
+    return [fused[index] for index in order[:PASSAGES]]
 
 
 def _fuse(*rankings: list[dict]) -> list[dict]:

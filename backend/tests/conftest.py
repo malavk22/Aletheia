@@ -23,7 +23,7 @@ settings.database_url = dev_url.set(database=TEST_DATABASE).render_as_string(
 )
 
 from app.core.db import engine, get_db  # noqa: E402
-from app.documents import embeddings  # noqa: E402
+from app.documents import embeddings, reranking  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services import documents as documents_service  # noqa: E402
 
@@ -75,6 +75,15 @@ def fake_embeddings(monkeypatch):
         embeddings, "embed_passages", lambda texts: [fake_vector(t) for t in texts]
     )
     monkeypatch.setattr(embeddings, "embed_query", fake_vector)
+
+
+@pytest.fixture(autouse=True)
+def fake_reranker(monkeypatch):
+    # Keeps the order it is given, so other tests see plain fused retrieval
+    # and nothing is downloaded. tests/test_retrieval.py uses the real model.
+    monkeypatch.setattr(
+        reranking, "relevance", lambda question, texts: [-float(i) for i in range(len(texts))]
+    )
 
 
 @pytest.fixture(autouse=True)

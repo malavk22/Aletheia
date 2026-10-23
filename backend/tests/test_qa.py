@@ -6,8 +6,9 @@ from pdfs import make_pdf
 from test_documents import upload, workspace_for
 
 from app.models.workspace import Workspace
+from app.documents import reranking
 from app.qa import llm
-from app.services.qa import NOT_FOUND, PASSAGES, _fuse, answer_question
+from app.services.qa import NOT_FOUND, PASSAGES, RERANK, _find_passages, _fuse, answer_question
 
 # Passages are found with the fake embedder from conftest.py (shared words),
 # and the model is a fake too: these tests check what Aletheia sends to the
@@ -304,3 +305,43 @@ def test_fused_passages_appear_once():
     fused = _fuse(ranked("a", "b"), ranked("b", "a"), ranked("a"))
 
     assert sorted(p["chunk_position"] for p in fused) == ["a", "b"]
+
+
+def test_the_reranker_picks_the_final_passages(client, db, monkeypatch):
+    workspace_id = workspace_for(client, "ada@example.com")
+    pages = [f"Clause {n} about the rent." for n in range(1, 9)]
+    upload(client, workspace_id, "lease.pdf", make_pdf(*pages))
+    seen = []
+
+    def relevance(question, texts):
+        seen.append(texts)
+        # Prefers clause 8, then 7, ...: the opposite of the fused order.
+        return [float(text.split()[1]) for text in texts]
+
+    monkeypatch.setattr(reranking, "relevance", relevance)
+
+    passages = _find_passages(db, workspace(db, workspace_id), "clause about the rent")
+
+    assert [p["page_number"] for p in passages] == [8, 7, 6, 5, 4, 3]
+    # It read every fused candidate (up to RERANK), not only the first six.
+    assert len(seen[0]) == min(8, RERANK)
+
+
+def test_equal_reranker_scores_keep_the_fused_order(client, db, monkeypatch):
+    workspace_id = workspace_for(client, "ada@example.com")
+    upload(client, workspace_id, "lease.pdf", make_pdf(*[f"Clause {n} about the rent." for n in range(1, 9)]))
+    fused_order = [p["page_number"] for p in _find_passages(db, workspace(db, workspace_id), "clause rent")]
+    monkeypatch.setattr(reranking, "relevance", lambda question, texts: [0.0] * len(texts))
+
+    passages = _find_passages(db, workspace(db, workspace_id), "clause rent")
+
+    assert [p["page_number"] for p in passages] == fused_order
+
+
+def test_nothing_found_means_no_reranking(client, db, monkeypatch):
+    workspace_id = workspace_for(client, "ada@example.com")
+    calls = []
+    monkeypatch.setattr(reranking, "relevance", lambda question, texts: calls.append(texts) or [])
+
+    assert _find_passages(db, workspace(db, workspace_id), "anything") == []
+    assert calls == []
