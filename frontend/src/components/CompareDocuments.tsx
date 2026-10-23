@@ -261,10 +261,10 @@ function PotentialConflicts({
   b: WorkspaceDocument
 }) {
   const check = useMutation({ mutationFn: () => checkConflicts(workspaceId, a.id, b.id) })
-  // 404, 409 and 503 (AI unavailable) come with a message for people.
-  // Anything else: the server could not be reached.
+  // 404, 409, 429 (AI usage limit) and 503 (AI unavailable) come with a
+  // message for people. Anything else: the server could not be reached.
   const errorMessage =
-    check.error instanceof ApiError && [404, 409, 503].includes(check.error.status)
+    check.error instanceof ApiError && [404, 409, 429, 503].includes(check.error.status)
       ? check.error.message
       : UNREACHABLE_MESSAGE
   const result = check.data

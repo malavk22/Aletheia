@@ -79,10 +79,11 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
 
   const showingPassages = view?.kind === 'passages'
   const error = mutation.error
-  // 422 (empty question) and 503 (the AI is unavailable) come with a message
-  // written for people. Anything else: the server could not be reached.
+  // 422 (empty question), 429 (AI usage limit, with when to try again) and
+  // 503 (AI unavailable) come with a message written for people. Anything
+  // else: the server could not be reached.
   const errorMessage =
-    error instanceof ApiError && (error.status === 422 || error.status === 503)
+    error instanceof ApiError && [422, 429, 503].includes(error.status)
       ? error.message
       : UNREACHABLE_MESSAGE
 
@@ -141,7 +142,7 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
         {view?.kind === 'answer' && error && !mutation.isPending && (
           <div className="mt-5 space-y-3">
             <FormError>{errorMessage}</FormError>
-            {error instanceof ApiError && error.status === 503 && (
+            {error instanceof ApiError && [429, 503].includes(error.status) && (
               // Not a dead end: finding passages needs no AI.
               <Button variant="secondary" onClick={findPassages}>
                 Find passages instead

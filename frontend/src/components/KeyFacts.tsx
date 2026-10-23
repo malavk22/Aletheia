@@ -115,11 +115,10 @@ export function KeyFacts({
   if (error || !data) return <FormError>{UNREACHABLE_MESSAGE}</FormError>
 
   const extracted = data.extracted_at !== null
-  // 409 (not processed) and 503 (AI unavailable) come with a message for
-  // people. Anything else: the server could not be reached.
+  // 409 (not processed), 429 (AI usage limit) and 503 (AI unavailable) come
+  // with a message for people. Anything else: the server could not be reached.
   const extractionError =
-    extraction.error instanceof ApiError &&
-    (extraction.error.status === 409 || extraction.error.status === 503)
+    extraction.error instanceof ApiError && [409, 429, 503].includes(extraction.error.status)
       ? extraction.error.message
       : UNREACHABLE_MESSAGE
   // Only the reply to an extraction says how many facts were left out.

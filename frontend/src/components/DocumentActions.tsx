@@ -76,7 +76,7 @@ export function DocumentActions({
 
   const searched = data.extracted_at !== null
   const findError =
-    finding.error instanceof ApiError && [409, 503].includes(finding.error.status)
+    finding.error instanceof ApiError && [409, 429, 503].includes(finding.error.status)
       ? finding.error.message
       : UNREACHABLE_MESSAGE
   const dropped = finding.data?.dropped ?? 0
