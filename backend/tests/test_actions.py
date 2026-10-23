@@ -150,10 +150,19 @@ def test_a_person_can_give_a_relative_deadline_a_date(client, db):
         {"kind": "reminder"},
         {"due_kind": "soon", "due_text": "soon"},
         {"confidence": "certain"},
-        {"status": "done"},
+        {"status": "finished"},
         # Confirmed without a time, and a time without being confirmed.
         {"status": "confirmed"},
         {"confirmed_at": datetime(2026, 1, 1, tzinfo=timezone.utc)},
+        # Done without having been confirmed, done without a time, and a
+        # done time on an action that isn't done.
+        {"status": "done", "done_at": datetime(2026, 1, 2, tzinfo=timezone.utc)},
+        {"status": "done", "confirmed_at": datetime(2026, 1, 1, tzinfo=timezone.utc)},
+        {
+            "status": "confirmed",
+            "confirmed_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+            "done_at": datetime(2026, 1, 2, tzinfo=timezone.utc),
+        },
     ],
 )
 def test_the_database_refuses_an_action_that_breaks_a_rule(client, db, fields):
@@ -177,6 +186,25 @@ def test_a_confirmed_action_keeps_when_and_by_whom(client, db):
     )
 
     assert (stored.status, stored.confirmed_by) == ("confirmed", user.id)
+
+
+def test_a_done_action_keeps_when_it_was_confirmed_and_finished(client, db):
+    _, document_id = lease(client)
+    user = db.scalars(select(User)).one()
+
+    stored = saved(
+        db,
+        action(
+            document_id,
+            status="done",
+            confirmed_at=datetime(2026, 10, 22, tzinfo=timezone.utc),
+            confirmed_by=user.id,
+            done_at=datetime(2026, 10, 23, tzinfo=timezone.utc),
+            done_by=user.id,
+        ),
+    )
+
+    assert (stored.status, stored.done_by) == ("done", user.id)
 
 
 def test_extracting_key_facts_leaves_actions_alone(client, db, fake_gemini_json):
@@ -460,6 +488,23 @@ def test_extracting_again_keeps_what_a_person_decided(client, db, fake_gemini_js
         ("Keep the garden tidy", "dismissed"),
         ("Notify the landlord", "suggested"),
         ("Pay 2,000 dollars", "confirmed"),
+    ]
+
+
+def test_extracting_again_keeps_a_done_action(client, db, fake_gemini_json):
+    document = contract(client, db)
+    fake_gemini_json({"actions": [found()]}, {"actions": [found(title="Make the payment")]})
+    extract_actions(db, document)
+    [payment] = stored_actions(db, document)
+    payment.status = "done"
+    payment.confirmed_at = payment.done_at = datetime.now(timezone.utc)
+    db.flush()
+
+    extract_actions(db, document)
+
+    # Its sentence isn't suggested again.
+    assert [(a.title, a.status) for a in stored_actions(db, document)] == [
+        ("Pay 2,000 dollars", "done")
     ]
 
 

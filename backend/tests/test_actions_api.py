@@ -189,7 +189,7 @@ def test_a_bad_change_is_refused(client, db, fake_gemini_json):
 
     assert client.patch(url, json={"title": "   "}).json()["detail"] == "The title can't be empty"
     assert client.patch(url, json={"title": "x" * 301}).status_code == 422
-    assert client.patch(url, json={"status": "done"}).status_code == 422
+    assert client.patch(url, json={"status": "finished"}).status_code == 422
     assert client.patch(url, json={"due_date": "15 March"}).status_code == 422
 
 
@@ -204,7 +204,7 @@ def test_the_workspace_list_can_show_only_confirmed_actions(client, db, fake_gem
     # Dated first: the relative deadline has no date, so it comes last.
     assert [action["title"] for action in confirmed] == ["Pay 2,000 dollars", "Give notice"]
     assert len(client.get(url).json()) == 3
-    assert client.get(url, params={"status": "done"}).status_code == 422
+    assert client.get(url, params={"status": "finished"}).status_code == 422
 
 
 def test_other_users_and_other_workspaces_cant_reach_actions(client, db, fake_gemini_json):
@@ -241,3 +241,66 @@ def test_the_document_list_says_whether_actions_were_found(client, db, fake_gemi
     assert client.get(list_url).json()[0]["actions_extracted_at"] is None
     client.post(actions_url(document))
     assert client.get(list_url).json()[0]["actions_extracted_at"] is not None
+
+
+def test_a_confirmed_action_can_be_marked_done_and_undone(client, db, fake_gemini_json):
+    document, actions = extracted(client, db, fake_gemini_json)
+    url = action_url(document, actions["Pay 2,000 dollars"]["id"])
+    confirmed = client.patch(url, json={"status": "confirmed"}).json()
+
+    done = client.patch(url, json={"status": "done"})
+
+    assert done.status_code == 200
+    assert done.json()["status"] == "done" and done.json()["done_at"] is not None
+    # Still confirmed underneath: the confirmation time is kept.
+    assert done.json()["confirmed_at"] == confirmed["confirmed_at"]
+    stored = db.get(DocumentAction, done.json()["id"])
+    assert stored.done_by == db.scalars(select(User)).one().id
+
+    undone = client.patch(url, json={"status": "confirmed"}).json()
+
+    assert (undone["status"], undone["done_at"]) == ("confirmed", None)
+    assert undone["confirmed_at"] == confirmed["confirmed_at"]
+    db.refresh(stored)
+    assert stored.done_by is None
+
+
+def test_only_a_confirmed_action_can_be_marked_done(client, db, fake_gemini_json):
+    document, actions = extracted(client, db, fake_gemini_json)
+    suggested = action_url(document, actions["Pay 2,000 dollars"]["id"])
+    dismissed = action_url(document, actions["Give notice"]["id"])
+    client.patch(dismissed, json={"status": "dismissed"})
+
+    for url in (suggested, dismissed):
+        response = client.patch(url, json={"status": "done"})
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Confirm an action before marking it done"
+    assert db.get(DocumentAction, actions["Pay 2,000 dollars"]["id"]).status == "suggested"
+
+
+def test_marking_done_again_keeps_the_first_time(client, db, fake_gemini_json):
+    document, actions = extracted(client, db, fake_gemini_json)
+    url = action_url(document, actions["Pay 2,000 dollars"]["id"])
+    client.patch(url, json={"status": "confirmed"})
+    first = client.patch(url, json={"status": "done"}).json()["done_at"]
+
+    assert client.patch(url, json={"status": "done"}).json()["done_at"] == first
+
+
+def test_the_workspace_list_can_show_confirmed_and_done_actions(client, db, fake_gemini_json):
+    document, actions = extracted(client, db, fake_gemini_json)
+    for title in ("Give notice", "Pay 2,000 dollars"):
+        client.patch(action_url(document, actions[title]["id"]), json={"status": "confirmed"})
+    client.patch(action_url(document, actions["Pay 2,000 dollars"]["id"]), json={"status": "done"})
+    url = f"/api/v1/workspaces/{document.workspace_id}/actions"
+
+    both = client.get(url, params={"status": ["confirmed", "done"]}).json()
+
+    assert [(a["title"], a["status"]) for a in both] == [
+        ("Pay 2,000 dollars", "done"),
+        ("Give notice", "confirmed"),
+    ]
+    assert [a["title"] for a in client.get(url, params={"status": "confirmed"}).json()] == [
+        "Give notice"
+    ]
