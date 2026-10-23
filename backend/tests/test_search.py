@@ -265,3 +265,49 @@ def test_equal_scores_come_back_in_the_same_order_every_time(client):
         ("b.pdf", 1),
         ("b.pdf", 2),
     ]
+
+
+def routers_workspace(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_pdf(
+        "The AX-300 admin address is 192.168.8.1.",
+        "The AX-500 admin address is 192.168.10.1.",
+        "Version 1 of 8 manuals, 192 pages, 168 figures.",
+        *[f"Chapter {n} is about something else." for n in range(1, 6)],
+    )
+    upload(client, workspace_id, "routers.pdf", content)
+    return db.get(Workspace, uuid.UUID(workspace_id))
+
+
+def test_rare_word_search_keeps_an_address_whole(client, db):
+    routers = routers_workspace(client, db)
+
+    # Split into "192", "168", "8", "1", it would find page 3 instead.
+    results = rare_word_search(db, routers, "What is 192.168.8.1?", 10)
+
+    assert [result["page_number"] for result in results] == [1]
+
+
+def test_rare_word_search_matches_a_model_code_as_the_documents_store_it(client, db):
+    routers = routers_workspace(client, db)
+
+    results = rare_word_search(db, routers, "AX-300", 10)
+
+    # Both pages say "AX", but only page 1 says "-300".
+    assert [result["page_number"] for result in results][0] == 1
+
+
+def test_rare_word_search_handles_a_web_address(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_pdf(
+        "Open http://router.local:8080/setup to start.",
+        *[f"Chapter {n} is about something else." for n in range(1, 6)],
+    )
+    upload(client, workspace_id, "manual.pdf", content)
+    manual = db.get(Workspace, uuid.UUID(workspace_id))
+
+    # PostgreSQL stores "router.local:8080", whose ":" would be a syntax error
+    # in a search query if the word weren't quoted.
+    results = rare_word_search(db, manual, "What is at http://router.local:8080/setup?", 10)
+
+    assert [result["page_number"] for result in results] == [1]

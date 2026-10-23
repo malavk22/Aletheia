@@ -1,6 +1,5 @@
-import re
-
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, cast, func, select
+from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.orm import Session
 
 from app.documents import embeddings
@@ -62,21 +61,44 @@ def rare_word_search(db: Session, workspace: Workspace, query: str, limit: int):
     so a word missing from the documents ("mentor") doesn't block one that is
     there ("guide")."""
     total = _count_chunks(db, workspace)
-    rare = []
-    for word in dict.fromkeys(re.findall(r"\w+", query.lower())):
-        found_in = _count_chunks(
-            db,
-            workspace,
-            DocumentChunk.search_words.bool_op("@@")(
-                func.plainto_tsquery("english", word)
-            ),
-        )
+    rare = [
+        word
+        for word in _words(db, query)
         # max(1, …): in a tiny workspace a word found once still counts.
-        if 0 < found_in <= max(1, total * COMMON_SHARE):
-            rare.append(word)
+        if 0 < _count_chunks(db, workspace, _contains(_any_of([word]))) <= max(1, total * COMMON_SHARE)
+    ]
     if not rare:
         return []
-    return keyword_search(db, workspace, " or ".join(rare), limit)
+    words = _any_of(rare)
+    return _search(
+        db,
+        workspace,
+        score=func.ts_rank_cd(DocumentChunk.search_words, words),
+        match=_contains(words),
+        limit=limit,
+    )
+
+
+def _words(db: Session, query: str) -> list[str]:
+    """The question's words exactly as PostgreSQL stores the documents' words,
+    so they can match: "192.168.8.1" stays one word, "AX-300" gives "ax" and
+    "-300", "claims" becomes "claim". A slash is also read as a space,
+    because PostgreSQL takes "mentor/guide" for one word (a file path)."""
+    vector = func.to_tsvector("english", query).op("||")(
+        func.to_tsvector("english", query.replace("/", " "))
+    )
+    return list(db.scalars(select(func.unnest(func.tsvector_to_array(vector)))))
+
+
+def _any_of(words: list[str]) -> ColumnElement:
+    """A search for chunks containing any of these stored words, as they are
+    (they are already stemmed, so they aren't parsed again)."""
+    quoted = ["'" + word.replace("\\", "\\\\").replace("'", "''") + "'" for word in words]
+    return cast(" | ".join(quoted), TSQUERY)
+
+
+def _contains(words: ColumnElement) -> ColumnElement[bool]:
+    return DocumentChunk.search_words.bool_op("@@")(words)
 
 
 def _count_chunks(db: Session, workspace: Workspace, *conditions) -> int:
