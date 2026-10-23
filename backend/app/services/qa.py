@@ -11,6 +11,13 @@ from app.services.search import rare_word_search, semantic_search
 # focused (and fast on the free tier).
 PASSAGES = 6
 
+# How many passages each search contributes before they are fused.
+CANDIDATES = 20
+# Reciprocal rank fusion: a passage scores 1 / (RRF_K + its rank) in each
+# list, added up. 60 is the usual value (Cormack et al., 2009): large enough
+# that being first in one list doesn't outweigh being high in both.
+RRF_K = 60
+
 NOT_FOUND = "The documents in this workspace don't answer this question."
 
 INSTRUCTIONS = f"""You answer questions about a person's documents.
@@ -50,16 +57,27 @@ def answer_question(db: Session, workspace: Workspace, question: str) -> dict:
 
 
 def _find_passages(db: Session, workspace: Workspace, question: str) -> list[dict]:
-    """The PASSAGES chunks the model reads: those containing the question's
-    rare words first (they name what is asked about), then the closest in
-    meaning (they catch questions worded differently from the documents)."""
-    by_words = rare_word_search(db, workspace, question, limit=PASSAGES)
-    # Twice as many as needed, in case some were already found by words.
-    by_meaning = semantic_search(db, workspace, question, limit=2 * PASSAGES)
+    """The PASSAGES chunks the model reads: the question's rare words (they
+    name what is asked about) and its meaning (it catches other wording)
+    each rank the passages, and the two rankings are fused."""
+    by_words = rare_word_search(db, workspace, question, limit=CANDIDATES)
+    by_meaning = semantic_search(db, workspace, question, limit=CANDIDATES)
+    return _fuse(by_words, by_meaning)[:PASSAGES]
+
+
+def _fuse(*rankings: list[dict]) -> list[dict]:
+    """The passages of all `rankings` in one list, best first, by reciprocal
+    rank fusion. Ranks are fused, not scores: a keyword score and a meaning
+    score are on different scales and can't be added. A passage high in both
+    lists comes first; equal totals keep the order they were first seen in."""
+    totals: dict[tuple, float] = {}
     passages: dict[tuple, dict] = {}
-    for passage in by_words + by_meaning:
-        passages.setdefault((passage["document_id"], passage["chunk_position"]), passage)
-    return list(passages.values())[:PASSAGES]
+    for ranking in rankings:
+        for rank, passage in enumerate(ranking, start=1):
+            key = (passage["document_id"], passage["chunk_position"])
+            passages.setdefault(key, passage)
+            totals[key] = totals.get(key, 0.0) + 1 / (RRF_K + rank)
+    return [passages[key] for key in sorted(totals, key=lambda key: -totals[key])]
 
 
 def _prompt(passages: list[dict], question: str) -> str:

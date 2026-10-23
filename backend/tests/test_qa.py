@@ -7,7 +7,7 @@ from test_documents import upload, workspace_for
 
 from app.models.workspace import Workspace
 from app.qa import llm
-from app.services.qa import NOT_FOUND, PASSAGES, answer_question
+from app.services.qa import NOT_FOUND, PASSAGES, _fuse, answer_question
 
 # Passages are found with the fake embedder from conftest.py (shared words),
 # and the model is a fake too: these tests check what Aletheia sends to the
@@ -270,3 +270,37 @@ def test_ask_signed_out_is_401(client, db, fake_llm):
 
     assert ask(client, ada.id, "rent?").status_code == 401
     assert calls == []
+
+
+def ranked(*names, score=0.0):
+    """A ranking of passages named by their chunk position, best first."""
+    return [{"document_id": "doc", "chunk_position": name, "score": score} for name in names]
+
+
+def test_a_passage_high_in_both_rankings_comes_first():
+    by_words = ranked("a", "b", "c")
+    by_meaning = ranked("c", "d", "a")
+
+    # a: 1/61 + 1/63, c: 1/63 + 1/61 (equal, a seen first), then b, d.
+    assert [p["chunk_position"] for p in _fuse(by_words, by_meaning)] == ["a", "c", "b", "d"]
+
+
+def test_second_in_both_rankings_beats_first_in_only_one():
+    by_words = ranked("only-words", "both")
+    by_meaning = ranked("only-meaning", "both")
+
+    assert _fuse(by_words, by_meaning)[0]["chunk_position"] == "both"
+
+
+def test_fusion_uses_ranks_not_scores():
+    # A huge keyword score must not outweigh a passage found by both.
+    by_words = ranked("loud", "both", score=1000.0)
+    by_meaning = ranked("quiet", "both", score=0.1)
+
+    assert _fuse(by_words, by_meaning)[0]["chunk_position"] == "both"
+
+
+def test_fused_passages_appear_once():
+    fused = _fuse(ranked("a", "b"), ranked("b", "a"), ranked("a"))
+
+    assert sorted(p["chunk_position"] for p in fused) == ["a", "b"]
