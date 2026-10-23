@@ -6,6 +6,7 @@ import {
   findActions,
   findActionsKey,
   formatDate,
+  formatDay,
   getDocumentActions,
   updateAction,
   workspaceActionsKey,
@@ -82,6 +83,7 @@ export function DocumentActions({
   const toReview = data.actions.filter((action) => action.status === 'suggested')
   const confirmed = data.actions.filter((action) => action.status === 'confirmed')
   const dismissed = data.actions.filter((action) => action.status === 'dismissed')
+  const done = data.actions.filter((action) => action.status === 'done')
 
   return (
     <div className="mt-3 rounded-sm border border-line bg-surface p-4">
@@ -128,6 +130,14 @@ export function DocumentActions({
             )}
             <ActionGroup title="To review" actions={toReview} workspaceId={workspaceId} />
             <ActionGroup title="Confirmed" actions={confirmed} workspaceId={workspaceId} />
+            {done.length > 0 && (
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm text-ink-muted hover:text-ink">
+                  Done ({done.length})
+                </summary>
+                <ActionGroup actions={done} workspaceId={workspaceId} />
+              </details>
+            )}
             {dismissed.length > 0 && (
               <details className="mt-4">
                 <summary className="cursor-pointer text-sm text-ink-muted hover:text-ink">
@@ -190,7 +200,7 @@ function ActionCard({ workspaceId, action }: { workspaceId: string; action: Acti
 
   return (
     <li
-      className={`rounded-sm border p-3 ${action.status === 'dismissed' ? 'border-line bg-paper' : 'border-line bg-surface'}`}
+      className={`rounded-sm border p-3 ${['dismissed', 'done'].includes(action.status) ? 'border-line bg-paper' : 'border-line bg-surface'}`}
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="font-semibold tracking-wide text-ink-muted uppercase">{action.kind}</span>
@@ -253,6 +263,14 @@ function ActionCard({ workspaceId, action }: { workspaceId: string; action: Acti
           {action.status === 'confirmed' && (
             <>
               <span className="mr-1 text-sm font-medium text-added">✓ Confirmed</span>
+              <button
+                type="button"
+                className={`${smallButton} text-added hover:underline`}
+                disabled={change.isPending}
+                onClick={() => change.mutate({ status: 'done' })}
+              >
+                Mark done
+              </button>
               <button type="button" className={`${smallButton} text-ink-muted hover:text-ink`} onClick={() => setEditing(true)}>
                 Edit
               </button>
@@ -261,6 +279,22 @@ function ActionCard({ workspaceId, action }: { workspaceId: string; action: Acti
                 className={`${smallButton} text-ink-muted hover:text-ink`}
                 disabled={change.isPending}
                 onClick={() => change.mutate({ status: 'suggested' })}
+              >
+                Undo
+              </button>
+            </>
+          )}
+          {action.status === 'done' && action.done_at !== null && (
+            <>
+              <span className="mr-1 text-sm font-medium text-added">
+                ✓ Done {formatDay(action.done_at)}
+              </span>
+              {/* Back to confirmed: it counts again in Upcoming. */}
+              <button
+                type="button"
+                className={`${smallButton} text-ink-muted hover:text-ink`}
+                disabled={change.isPending}
+                onClick={() => change.mutate({ status: 'confirmed' })}
               >
                 Undo
               </button>
