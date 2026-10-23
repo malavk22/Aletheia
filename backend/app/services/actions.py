@@ -229,7 +229,7 @@ def _stated(day: date, text: str) -> bool:
     return day.month in numbers and not ambiguous
 
 
-STATUSES = ("suggested", "confirmed", "dismissed")
+STATUSES = ("suggested", "confirmed", "dismissed", "done")
 
 
 def list_actions(
@@ -237,7 +237,7 @@ def list_actions(
     *,
     workspace_id: uuid.UUID | None = None,
     document_id: uuid.UUID | None = None,
-    status: str | None = None,
+    statuses: list[str] | None = None,
 ) -> list[dict]:
     """Actions of one document or of a whole workspace, each with its
     document's name and its part's page or heading. Dated ones first, by
@@ -267,8 +267,8 @@ def list_actions(
         query = query.where(Document.workspace_id == workspace_id)
     if document_id is not None:
         query = query.where(DocumentAction.document_id == document_id)
-    if status is not None:
-        query = query.where(DocumentAction.status == status)
+    if statuses:
+        query = query.where(DocumentAction.status.in_(statuses))
     return [
         _read(action, filename, page_number, heading, source)
         for action, filename, page_number, heading, source in db.execute(query)
@@ -307,12 +307,22 @@ def update_action(db: Session, action: DocumentAction, user_id: uuid.UUID, chang
         status = changes["status"]
         if status not in STATUSES:
             raise ValueError("Unknown status")
-        action.status = status
-        if status == "confirmed":
-            action.confirmed_at = datetime.now(timezone.utc)
-            action.confirmed_by = user_id
+        # Done only after a person confirmed: finishing can't skip confirming.
+        if status == "done" and action.status not in ("confirmed", "done"):
+            raise ValueError("Confirm an action before marking it done")
+        now = datetime.now(timezone.utc)
+        if status in ("confirmed", "done"):
+            # Undoing "done" keeps when it was first confirmed.
+            if action.confirmed_at is None:
+                action.confirmed_at, action.confirmed_by = now, user_id
         else:
             action.confirmed_at, action.confirmed_by = None, None
+        if status == "done":
+            if action.done_at is None:
+                action.done_at, action.done_by = now, user_id
+        else:
+            action.done_at, action.done_by = None, None
+        action.status = status
     db.commit()
 
 
@@ -332,6 +342,7 @@ def _read(action: DocumentAction, filename, page_number, heading, source) -> dic
         "confidence": action.confidence,
         "status": action.status,
         "confirmed_at": action.confirmed_at,
+        "done_at": action.done_at,
         "part_position": action.part_position,
         "page_number": page_number,
         "heading": heading,

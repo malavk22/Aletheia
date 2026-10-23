@@ -26,9 +26,10 @@ class ActionRead(BaseModel):
     quote: str
     # high, medium or low, worked out by rules from the evidence.
     confidence: str
-    # suggested (not yet counted), confirmed or dismissed.
+    # suggested (not yet counted), confirmed, dismissed or done.
     status: str
     confirmed_at: datetime | None
+    done_at: datetime | None
     # Where the quote is: its part, and that part's page (PDF) or heading
     # (DOCX); "ocr" if the text was read from an image.
     part_position: int
@@ -49,7 +50,7 @@ class DocumentActionsRead(BaseModel):
 class ActionUpdate(BaseModel):
     """A person's decision. Only the fields sent are changed."""
 
-    status: Literal["suggested", "confirmed", "dismissed"] | None = None
+    status: Literal["suggested", "confirmed", "dismissed", "done"] | None = None
     title: str | None = Field(default=None, max_length=300)
     # A date the person sets (saved as theirs), or null to clear it.
     due_date: date | None = None

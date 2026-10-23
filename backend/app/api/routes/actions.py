@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_document_in_workspace, get_workspace_for_member
@@ -59,12 +59,13 @@ def run_extraction(
 
 @router.get("/actions", response_model=list[ActionRead])
 def read_workspace_actions(
-    status: Literal["suggested", "confirmed", "dismissed"] | None = None,
+    # Repeat it for several: ?status=confirmed&status=done; none given: all.
+    status: list[Literal["suggested", "confirmed", "dismissed", "done"]] = Query(default=[]),
     workspace: Workspace = Depends(get_workspace_for_member),
     db: Session = Depends(get_db),
 ):
-    # For the timeline and the upcoming list: status=confirmed.
-    return list_actions(db, workspace_id=workspace.id, status=status)
+    # For the timeline and the upcoming list: confirmed and done.
+    return list_actions(db, workspace_id=workspace.id, statuses=status)
 
 
 @router.patch("/actions/{action_id}", response_model=ActionRead)
