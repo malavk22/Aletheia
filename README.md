@@ -40,15 +40,26 @@ closest in meaning and asks Gemini which ones contradict each other; each
 **potential conflict** shows both documents' own sentences and pages, and is kept
 only if both sentences really are in their documents.
 
-**Next — V0.7: action layer.** Deadlines, tasks and a timeline pulled out of
-documents, each with its source, confirmed by a person before it counts.
+**V0.7 — Action layer (done).** **Actions** on every processed document: the
+deadlines and tasks it asks of someone, found by Gemini, each with the
+document's own sentence and page (kept only if that sentence really is on that
+page). Exact dates ("by 15 March 2026") and relative deadlines ("within 30 days
+of signing") are kept apart, and a date is never worked out or guessed: a
+relative deadline gets a date only from a person, marked as theirs. Confidence
+comes from rules on the evidence. Every action is a suggestion until a person
+confirms it; confirmed actions of the whole workspace are listed as
+**Upcoming** (overdue and the next 14 days), **Timeline** (by month) and **No
+fixed date**. Reminders are shown in the app only (no email or phone).
+
+**Next — V0.8: advanced RAG.** Hybrid retrieval, reranking, section filters and
+questions across several documents.
 
 ## Tech stack
 
 - **Backend:** Python, FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Database:** PostgreSQL + pgvector (vector search), full-text search
 - **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), Tesseract OCR,
-  Google Gemini for answers, key facts and conflict checks (`google-genai`)
+  Google Gemini for answers, key facts, conflict checks and actions (`google-genai`)
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 
 ## Run the backend locally
@@ -100,9 +111,11 @@ the whole document's text, only when you click "Key facts" on a document not
 extracted before, or "Extract again" (a 50-page report takes about a minute).
 Check for conflicts sends up to 8 pairs of matched passages (about 12,000
 characters), only when you click it; comparing versions never uses Gemini.
-Without a key everything else works; Ask, Key facts and Check for conflicts show
-"Couldn't … right now". `LLM_MODEL` and
-`LLM_FALLBACK_MODEL` choose the models (see `.env.example`).
+Actions send the whole document's text, like Key facts, only when you click
+"Actions" on a document not searched before, or "Find again"; the workspace's
+Upcoming and Timeline lists never call Gemini.
+Without a key everything else works; Ask, Key facts, Check for conflicts and
+Actions show "Couldn't … right now". `LLM_MODEL` and `LLM_FALLBACK_MODEL` choose the models (see `.env.example`).
 
 Tests run in their own database, `aletheia_test`, which is created
 automatically on the first run. They never touch the `aletheia` database.
