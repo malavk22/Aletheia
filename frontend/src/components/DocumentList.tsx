@@ -8,7 +8,7 @@ import {
   listDocuments,
 } from '../api/documents.ts'
 import type { WorkspaceDocument } from '../api/documents.ts'
-import { findActionsKey } from '../api/actions.ts'
+import { findActionsKey, workspaceActionsKey } from '../api/actions.ts'
 import { extractFactsKey } from '../api/facts.ts'
 import { Button } from './Button.tsx'
 import { DocumentActions } from './DocumentActions.tsx'
@@ -77,7 +77,11 @@ function DocumentRow({
   const finding = useIsMutating({ mutationKey: findActionsKey(document.id) }) > 0
   const mutation = useMutation({
     mutationFn: () => deleteDocument(workspaceId, document.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) }),
+    onSuccess: () => {
+      // A deleted document's actions are deleted with it.
+      queryClient.invalidateQueries({ queryKey: workspaceActionsKey(workspaceId) })
+      return queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) })
+    },
   })
 
   const textButton =
