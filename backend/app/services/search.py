@@ -115,7 +115,10 @@ def _search(
         # Only this workspace's documents, filtered inside the query itself,
         # so other workspaces' text is never even read.
         .where(Document.workspace_id == workspace.id, match)
-        .order_by(score.desc())
+        # Equal scores are common in keyword search; without a tie-breaker
+        # PostgreSQL returns them in any order, so the same question could
+        # find different passages from one run to the next.
+        .order_by(score.desc(), Document.filename, DocumentChunk.position)
         .limit(limit)
     ).all()
     return [

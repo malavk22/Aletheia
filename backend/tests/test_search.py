@@ -248,3 +248,20 @@ def test_rare_word_search_only_looks_in_that_workspace(client, db):
     ada = db.get(Workspace, uuid.UUID(ada_id))
 
     assert rare_word_search(db, ada, "guide", 10) == []
+
+
+def test_equal_scores_come_back_in_the_same_order_every_time(client):
+    # Same words on every page: the same keyword score. Without a tie-breaker
+    # PostgreSQL may return equal scores in any order.
+    workspace_id = workspace_for(client, "ada@example.com")
+    upload(client, workspace_id, "b.pdf", make_pdf("The deposit is paid.", "The deposit is paid."))
+    upload(client, workspace_id, "a.pdf", make_pdf("The deposit is paid."))
+
+    results = keyword(client, workspace_id, "deposit").json()
+
+    # By file name, then reading order.
+    assert [(r["filename"], r["page_number"]) for r in results] == [
+        ("a.pdf", 1),
+        ("b.pdf", 1),
+        ("b.pdf", 2),
+    ]
