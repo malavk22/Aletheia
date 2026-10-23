@@ -10,6 +10,7 @@ import { DeleteWorkspace } from '../components/DeleteWorkspace.tsx'
 import { DocumentList } from '../components/DocumentList.tsx'
 import { FormError } from '../components/FormError.tsx'
 import { UploadDocuments } from '../components/UploadDocuments.tsx'
+import { WorkspaceActions } from '../components/WorkspaceActions.tsx'
 
 // One workspace: its name, the question box, an upload button, and its documents.
 // The id comes from the address, /workspaces/<id>.
@@ -70,12 +71,23 @@ export function WorkspacePage() {
                     Documents
                   </h2>
                   <p className="mt-1 text-sm text-ink-muted">
-                    Ask and Key facts use Google Gemini: the relevant text of your documents is
-                    sent to Google.
+                    Ask, Key facts and Actions use Google Gemini: the relevant text of your
+                    documents is sent to Google.
                   </p>
                 </div>
                 <UploadDocuments workspaceId={workspace.id} />
                 <DocumentList workspaceId={workspace.id} />
+              </section>
+              <section aria-labelledby="actions-heading" className="space-y-6">
+                <div>
+                  <h2 id="actions-heading" className="font-serif text-xl font-semibold tracking-tight">
+                    Actions
+                  </h2>
+                  <p className="mt-1 text-sm text-ink-muted">
+                    The deadlines and tasks you confirmed, from every document.
+                  </p>
+                </div>
+                <WorkspaceActions workspaceId={workspace.id} />
               </section>
               <section aria-labelledby="compare-heading" className="space-y-6">
                 <div>
