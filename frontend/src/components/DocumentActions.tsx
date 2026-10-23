@@ -386,7 +386,7 @@ function EditForm({
   )
 }
 
-function PageLink({ workspaceId, action }: { workspaceId: string; action: Action }) {
+export function PageLink({ workspaceId, action }: { workspaceId: string; action: Action }) {
   if (action.page_number === null) {
     return <Tag>{action.heading ?? 'Before the first heading'}</Tag>
   }
