@@ -192,7 +192,9 @@ class DocumentAction(Base):
         CheckConstraint("kind IN ('deadline', 'task')", name="ck_actions_kind"),
         CheckConstraint("due_kind IN ('exact', 'relative', 'none')", name="ck_actions_due_kind"),
         CheckConstraint("confidence IN ('high', 'medium', 'low')", name="ck_actions_confidence"),
-        CheckConstraint("status IN ('suggested', 'confirmed', 'dismissed')", name="ck_actions_status"),
+        CheckConstraint(
+            "status IN ('suggested', 'confirmed', 'dismissed', 'done')", name="ck_actions_status"
+        ),
         # A date always says where it came from, and a source always has a date.
         CheckConstraint(
             "(due_date IS NULL) = (due_date_source IS NULL)", name="ck_actions_due_date_has_source"
@@ -206,9 +208,12 @@ class DocumentAction(Base):
         # A deadline as written ("by 15 March 2026", "within 30 days of
         # leaving") is kept whenever there is one.
         CheckConstraint("due_kind = 'none' OR due_text IS NOT NULL", name="ck_actions_due_has_text"),
+        # A done action was confirmed first, and keeps when that was.
         CheckConstraint(
-            "(status = 'confirmed') = (confirmed_at IS NOT NULL)", name="ck_actions_confirmed_has_time"
+            "(status IN ('confirmed', 'done')) = (confirmed_at IS NOT NULL)",
+            name="ck_actions_confirmed_has_time",
         ),
+        CheckConstraint("(status = 'done') = (done_at IS NOT NULL)", name="ck_actions_done_has_time"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -237,7 +242,8 @@ class DocumentAction(Base):
     # How much to trust the suggestion: high, medium or low, worked out by
     # rules from the evidence, not asked from the AI.
     confidence: Mapped[str] = mapped_column(String(10))
-    # suggested (found by the AI, not yet counted), confirmed or dismissed.
+    # suggested (found by the AI, not yet counted), confirmed, dismissed, or
+    # done (confirmed, then finished by a person).
     status: Mapped[str] = mapped_column(String(20), server_default="suggested")
     # When and by whom it was confirmed. The person is kept as empty if
     # their account is deleted.
@@ -245,6 +251,9 @@ class DocumentAction(Base):
     confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
+    # When and by whom it was marked done.
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    done_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
