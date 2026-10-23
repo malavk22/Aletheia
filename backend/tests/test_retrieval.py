@@ -38,9 +38,12 @@ BASELINE = {"recall@6": 0.881, "recall@3": 0.726, "MRR": 0.668}
 
 # Each kept upgrade, scored on the same set. The latest is what a change must
 # not fall below.
-# Step 2, rank fusion of rare words and meaning (20 candidates each): words
-# 0.9, reworded 0.846, names 0.9, parts 0.944; median 72 ms a question.
-KEPT = {"recall@6": 0.893, "recall@3": 0.857, "MRR": 0.764}
+# Step 2, rank fusion of rare words and meaning (20 candidates each):
+# recall@6 0.893, recall@3 0.857, MRR 0.764; median 72 ms a question.
+# Step 2b, rare words taken as PostgreSQL stores them ("192.168.8.1" whole),
+# below. By kind, recall@6: words 0.9, reworded 0.923, names 1.0, parts
+# 0.944; median 44 ms.
+KEPT = {"recall@6": 0.94, "recall@3": 0.905, "MRR": 0.81}
 
 
 @pytest.fixture
