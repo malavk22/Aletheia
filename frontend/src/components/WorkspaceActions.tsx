@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { formatDate, listWorkspaceActions, workspaceActionsKey } from '../api/actions.ts'
+import { formatDate, formatDay, listWorkspaceActions, workspaceActionsKey } from '../api/actions.ts'
 import type { Action } from '../api/actions.ts'
 import { UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { PageLink } from './DocumentActions.tsx'
@@ -31,12 +31,14 @@ function daysBetween(from: string, to: string) {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
 }
 
-// Confirmed actions sorted into the three tabs. `actions` come from the API
-// dated first, by date, so every group keeps that order.
+// Confirmed and done actions sorted into the three tabs. `actions` come from
+// the API dated first, by date, so every group keeps that order. Done ones
+// are never overdue or upcoming: they stay in the timeline as history.
 function groupActions(actions: Action[], today: string) {
   const dated = actions.filter((action): action is Dated => action.due_date !== null)
-  const overdue = dated.filter((action) => daysBetween(today, action.due_date) < 0)
-  const soon = dated.filter((action) => {
+  const toDo = dated.filter((action) => action.status !== 'done')
+  const overdue = toDo.filter((action) => daysBetween(today, action.due_date) < 0)
+  const soon = toDo.filter((action) => {
     const days = daysBetween(today, action.due_date)
     return days >= 0 && days <= SOON_DAYS
   })
@@ -46,7 +48,10 @@ function groupActions(actions: Action[], today: string) {
     const month = action.due_date.slice(0, 7)
     months.set(month, [...(months.get(month) ?? []), action])
   }
-  const undated = actions.filter((action) => action.due_date === null)
+  // Still to do first, then done.
+  const undated = actions
+    .filter((action) => action.due_date === null)
+    .sort((a, b) => Number(a.status === 'done') - Number(b.status === 'done'))
   return { dated, overdue, soon, months: [...months], undated }
 }
 
@@ -57,15 +62,15 @@ function formatMonth(month: string) {
   )
 }
 
-// The confirmed actions of every document in the workspace: what is overdue or
-// coming up, all dated ones by month, and those with no date. A reminder in
+// The confirmed (and done) actions of every document in the workspace: what
+// is overdue or coming up, all dated ones by month, and those with no date. A reminder in
 // the page only: nothing is sent by email or phone.
 export function WorkspaceActions({ workspaceId }: { workspaceId: string }) {
   const [tab, setTab] = useState<Tab>('upcoming')
   const { data, isPending, error } = useQuery({
     // Under the workspace's actions key, so every change in a panel refreshes it.
-    queryKey: [...workspaceActionsKey(workspaceId), 'confirmed'],
-    queryFn: () => listWorkspaceActions(workspaceId, 'confirmed'),
+    queryKey: [...workspaceActionsKey(workspaceId), 'confirmed', 'done'],
+    queryFn: () => listWorkspaceActions(workspaceId, ['confirmed', 'done']),
   })
 
   if (isPending) return <FactsSkeleton />
@@ -203,13 +208,14 @@ function Group({
 // One line per action: when, what and who, and which document and page.
 // The quote stays in the document's Actions panel.
 function ActionRow({ workspaceId, action, today }: { workspaceId: string; action: Action; today: string }) {
+  const done = action.status === 'done' && action.done_at !== null
   return (
-    <li className="flex gap-4 py-2.5">
+    <li className={`flex gap-4 py-2.5 ${done ? 'opacity-60' : ''}`}>
       <div className="w-28 shrink-0 text-sm">
         {action.due_date !== null ? (
           <>
             <p className="font-medium">{formatDate(action.due_date)}</p>
-            <DueLabel days={daysBetween(today, action.due_date)} />
+            {done ? null : <DueLabel days={daysBetween(today, action.due_date)} />}
           </>
         ) : action.due_kind === 'relative' ? (
           <span className="rounded-sm bg-highlight px-1.5 text-xs font-medium text-ink">Relative</span>
@@ -219,8 +225,11 @@ function ActionRow({ workspaceId, action, today }: { workspaceId: string; action
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm">
-          <span className="font-medium">{action.title}</span>
+          <span className={`font-medium ${done ? 'line-through' : ''}`}>{action.title}</span>
           {action.responsible && <span className="text-ink-muted"> · {action.responsible}</span>}
+          {done && action.done_at !== null && (
+            <span className="ml-2 text-xs font-medium text-added">✓ Done {formatDay(action.done_at)}</span>
+          )}
         </p>
         {action.due_date === null && action.due_text && (
           <p className="mt-0.5 text-sm text-ink-muted">the document says “{action.due_text}”</p>
