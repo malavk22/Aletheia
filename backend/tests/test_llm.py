@@ -10,9 +10,22 @@ MAIN = "main-model"
 FALLBACK = "fallback-model"
 
 
-def gemini_error(code: int) -> errors.APIError:
-    status = {400: "INVALID_ARGUMENT", 429: "RESOURCE_EXHAUSTED", 503: "UNAVAILABLE"}
+def gemini_error(code: int, retry_delay: str | None = None) -> errors.APIError:
+    status = {
+        400: "INVALID_ARGUMENT",
+        403: "PERMISSION_DENIED",
+        429: "RESOURCE_EXHAUSTED",
+        500: "INTERNAL",
+        503: "UNAVAILABLE",
+    }
     body = {"error": {"code": code, "message": "test", "status": status[code]}}
+    if retry_delay is not None:
+        # The shape Gemini sends with a 429 (seen in the server log).
+        body["error"]["details"] = [
+            {"@type": "type.googleapis.com/google.rpc.Help", "links": []},
+            {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": []},
+            {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": retry_delay},
+        ]
     return (errors.ServerError if code >= 500 else errors.ClientError)(code, body)
 
 
@@ -145,3 +158,97 @@ def test_generate_json_falls_back_when_busy(fake_gemini):
     assert llm.generate_json("instructions", "text", SCHEMA) == {"days": 30}
     assert [call.model for call in models.calls] == [MAIN, FALLBACK]
     assert models.calls[1].config.response_json_schema == SCHEMA
+
+
+# What kind of failure it was: decides whether people are told to try again.
+
+
+def failure():
+    """The LLMError that generate raises with the fake installed."""
+    with pytest.raises(llm.LLMError) as caught:
+        llm.generate("instructions", "question")
+    return caught.value
+
+
+@pytest.mark.parametrize(
+    "delay, seconds",
+    [("55s", 55), ("56638s", 56638), ("1.5s", 2)],
+)
+def test_a_usage_limit_says_how_long_to_wait(fake_gemini, monkeypatch, delay, seconds):
+    fake_gemini(gemini_error(429, delay))
+    monkeypatch.setattr(settings, "llm_fallback_model", None)
+
+    error = failure()
+
+    assert (error.kind, error.retry_after) == (llm.LIMIT, seconds)
+
+
+def test_a_usage_limit_without_a_wait_has_no_retry_time(fake_gemini, monkeypatch):
+    fake_gemini(gemini_error(429))
+    monkeypatch.setattr(settings, "llm_fallback_model", None)
+
+    error = failure()
+
+    assert (error.kind, error.retry_after) == (llm.LIMIT, None)
+
+
+@pytest.mark.parametrize("code", [500, 503])
+def test_a_server_error_is_temporary_not_a_limit(fake_gemini, monkeypatch, code):
+    # A 503 means Gemini is busy or down; it says nothing about a limit.
+    fake_gemini(gemini_error(code))
+    monkeypatch.setattr(settings, "llm_fallback_model", None)
+
+    error = failure()
+
+    assert (error.kind, error.retry_after) == (llm.TEMPORARY, None)
+
+
+@pytest.mark.parametrize("code", [400, 403])
+def test_a_rejected_request_or_key_is_refused(fake_gemini, code):
+    fake_gemini(gemini_error(code))
+
+    assert failure().kind == llm.REFUSED
+
+
+def test_no_key_is_refused():
+    # conftest removes the key for every test.
+    assert failure().kind == llm.REFUSED
+
+
+def test_an_unusable_reply_is_temporary(fake_gemini):
+    fake_gemini('{"days": 3')
+
+    with pytest.raises(llm.LLMError) as caught:
+        llm.generate_json("instructions", "text", SCHEMA)
+
+    assert caught.value.kind == llm.TEMPORARY
+
+
+@pytest.mark.parametrize(
+    "main, fallback, kind, retry_after",
+    [
+        # Both over a limit: the sooner wait, when one of them answers again.
+        (gemini_error(429, "56638s"), gemini_error(429, "55s"), llm.LIMIT, 55),
+        (gemini_error(429, "40s"), gemini_error(429, "56638s"), llm.LIMIT, 40),
+        (gemini_error(429), gemini_error(429, "55s"), llm.LIMIT, 55),
+        (gemini_error(429), gemini_error(429), llm.LIMIT, None),
+        # One busy: trying again soon may work.
+        (gemini_error(429, "56638s"), gemini_error(503), llm.TEMPORARY, None),
+        (gemini_error(503), gemini_error(429, "55s"), llm.TEMPORARY, None),
+        # The main model comes back after its wait, even if the fallback
+        # was refused (a wrong fallback model name, say).
+        (gemini_error(429, "55s"), gemini_error(400), llm.LIMIT, 55),
+        (gemini_error(503), gemini_error(403), llm.TEMPORARY, None),
+    ],
+)
+def test_when_both_models_fail_the_one_back_soonest_decides(
+    fake_gemini, main, fallback, kind, retry_after
+):
+    models = fake_gemini(main, fallback)
+
+    error = failure()
+
+    assert (error.kind, error.retry_after) == (kind, retry_after)
+    assert len(models.calls) == 2
+    # Both failures stay in the message, for the server log.
+    assert str(main.code) in str(error) and str(fallback.code) in str(error)
