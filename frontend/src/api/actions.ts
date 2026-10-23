@@ -3,7 +3,8 @@ import { api } from './client.ts'
 // exact: the document gives a full date; relative: "within 30 days of
 // leaving", or a date without a year; none: no time given.
 export type DueKind = 'exact' | 'relative' | 'none'
-export type ActionStatus = 'suggested' | 'confirmed' | 'dismissed'
+// done: confirmed, then finished by a person.
+export type ActionStatus = 'suggested' | 'confirmed' | 'dismissed' | 'done'
 
 // Something someone must do, found by the AI. It only counts once a person
 // confirms it.
@@ -28,6 +29,7 @@ export type Action = {
   confidence: 'high' | 'medium' | 'low'
   status: ActionStatus
   confirmed_at: string | null
+  done_at: string | null
   part_position: number
   page_number: number | null
   heading: string | null
@@ -77,9 +79,10 @@ export function findActions(workspaceId: string, documentId: string) {
   return api<DocumentActions>(documentActionsPath(workspaceId, documentId), { method: 'POST' })
 }
 
-// Every document's actions with this status, dated ones first, by date.
-export function listWorkspaceActions(workspaceId: string, status: ActionStatus) {
-  return api<Action[]>(`/workspaces/${workspaceId}/actions?status=${status}`)
+// Every document's actions with these statuses, dated ones first, by date.
+export function listWorkspaceActions(workspaceId: string, statuses: ActionStatus[]) {
+  const query = new URLSearchParams(statuses.map((status) => ['status', status]))
+  return api<Action[]>(`/workspaces/${workspaceId}/actions?${query}`)
 }
 
 export function updateAction(workspaceId: string, actionId: string, change: ActionChange) {
@@ -98,4 +101,11 @@ export function formatDate(isoDate: string) {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(`${isoDate}T00:00:00Z`))
+}
+
+// "23 Oct 2026" for a moment such as done_at, in the viewer's own time zone.
+export function formatDay(isoTime: string) {
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+    new Date(isoTime),
+  )
 }
