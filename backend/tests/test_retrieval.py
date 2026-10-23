@@ -36,6 +36,12 @@ from app.services.qa import PASSAGES, _find_passages
 # words 0.9, reworded 0.846, names 0.9, parts 0.889; median 48 ms a question.
 BASELINE = {"recall@6": 0.881, "recall@3": 0.726, "MRR": 0.668}
 
+# Each kept upgrade, scored on the same set. The latest is what a change must
+# not fall below.
+# Step 2, rank fusion of rare words and meaning (20 candidates each): words
+# 0.9, reworded 0.846, names 0.9, parts 0.944; median 72 ms a question.
+KEPT = {"recall@6": 0.893, "recall@3": 0.857, "MRR": 0.764}
+
 
 @pytest.fixture
 def real_embeddings(monkeypatch):
@@ -115,12 +121,11 @@ def show(card: dict) -> None:
             print(f"  [{row['kind']}] {row['question']} (recall {row['recall@6']:.2f})")
 
 
-def test_retrieval_scores_at_least_the_baseline(client, db, real_embeddings):
+def test_retrieval_scores_at_least_the_last_kept_upgrade(client, db, real_embeddings):
     checked_workspace = check_workspaces(client, db)
 
     card = scorecard(db, checked_workspace, _find_passages)
 
     show(card)
-    if BASELINE is not None:
-        for score in ("recall@6", "recall@3", "MRR"):
-            assert card["kinds"]["all"][score] >= BASELINE[score], score
+    for score in ("recall@6", "recall@3", "MRR"):
+        assert card["kinds"]["all"][score] >= KEPT[score], score
