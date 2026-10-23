@@ -113,6 +113,18 @@ def test_when_gemini_fails_the_answer_is_503(client, db, fake_gemini_json):
     assert "model-x" not in detail
 
 
+def test_a_usage_limit_is_429(client, db, fake_gemini_json):
+    document = contract(client, db)
+    fake_gemini_json(llm.LLMError("Gemini could not answer: 429", llm.LIMIT, 3600))
+
+    response = client.post(actions_url(document))
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == (
+        "Couldn't find actions: the AI usage limit has been reached. Try again in about 1 hour."
+    )
+
+
 def test_confirming_records_when_and_who_and_undoing_clears_it(client, db, fake_gemini_json):
     document, actions = extracted(client, db, fake_gemini_json)
     payment = actions["Pay 2,000 dollars"]

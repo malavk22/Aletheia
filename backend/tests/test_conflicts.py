@@ -158,6 +158,19 @@ def test_when_gemini_fails_the_answer_is_503(client, fake_gemini_json):
     assert "model-x" not in detail
 
 
+def test_a_usage_limit_is_429(client, fake_gemini_json):
+    workspace_id, a_id, b_id = two_documents(client)
+    fake_gemini_json(llm.LLMError("Gemini could not answer: 429", llm.LIMIT, 1200))
+
+    response = check(client, workspace_id, a_id, b_id)
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == (
+        "Couldn't check for conflicts: the AI usage limit has been reached. "
+        "Try again in about 20 minutes."
+    )
+
+
 def test_nothing_is_sent_when_the_documents_cant_be_compared(client, fake_gemini_json):
     workspace_id, a_id, b_id = two_documents(client)
     failed_id = upload(client, workspace_id, "scan.pdf", make_pdf("")).json()["id"]

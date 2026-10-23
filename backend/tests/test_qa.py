@@ -253,6 +253,44 @@ def test_ask_when_gemini_fails_is_503_with_a_plain_message(client, db, fake_llm)
     assert "model-x" not in detail
 
 
+def test_ask_over_a_usage_limit_is_429_with_when_to_try_again(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    # A daily free-tier limit: Gemini asked for a wait of about 16 hours.
+    fake_llm(llm.LLMError("Gemini could not answer: 429 model-x", llm.LIMIT, 56638))
+
+    response = ask(client, ada.id, "rent?")
+
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "56638"
+    assert response.json()["detail"] == (
+        "Couldn't write an answer: the AI usage limit has been reached. "
+        "Try again in about 16 hours."
+    )
+
+
+def test_ask_over_a_limit_with_no_known_wait_says_later(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    fake_llm(llm.LLMError("Gemini could not answer: 429", llm.LIMIT))
+
+    response = ask(client, ada.id, "rent?")
+
+    assert response.status_code == 429
+    assert "Retry-After" not in response.headers
+    assert response.json()["detail"].endswith("Try again later.")
+
+
+def test_ask_when_gemini_is_not_set_up_says_retrying_wont_help(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    fake_llm(llm.LLMError("No Gemini API key is set", llm.REFUSED))
+
+    response = ask(client, ada.id, "rent?")
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert "trying again won't help" in detail
+    assert "Try again in a minute" not in detail
+
+
 def test_ask_in_someone_elses_workspace_is_404(client, db, fake_llm):
     bob_id = workspace_for(client, "bob@example.com")
     workspace_for(client, "ada@example.com")  # now signed in as Ada

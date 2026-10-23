@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.ai_errors import ai_failure
 from app.api.deps import get_document_in_workspace
 from app.core.db import get_db
 from app.models.document import Document
@@ -39,12 +40,10 @@ def run_extraction(
         )
     try:
         result = extract_facts(db, document)
-    except LLMError:
+    except LLMError as error:
         # Details go to the server log; the person gets a message they can act on.
         logger.exception("Extracting key facts failed")
-        raise HTTPException(
-            status_code=503, detail="Couldn't extract key facts right now. Try again in a minute."
-        )
+        raise ai_failure(error, "Couldn't extract key facts")
     return {
         "extracted_at": document.facts_extracted_at,
         "facts": list_facts(db, document),

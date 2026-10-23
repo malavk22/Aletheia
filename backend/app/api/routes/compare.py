@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.ai_errors import ai_failure
 from app.api.deps import get_workspace_for_member
 from app.core.db import get_db
 from app.models.document import Document
@@ -60,12 +61,10 @@ def check_conflicts(
     )
     try:
         result = find_conflicts(db, *documents)
-    except LLMError:
+    except LLMError as error:
         # Details go to the server log; the person gets a message they can act on.
         logger.exception("Checking for conflicts failed")
-        raise HTTPException(
-            status_code=503, detail="Couldn't check for conflicts right now. Try again in a minute."
-        )
+        raise ai_failure(error, "Couldn't check for conflicts")
     return {
         "potential_conflicts": result["conflicts"],
         "checked_pairs": result["checked_pairs"],

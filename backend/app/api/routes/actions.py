@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.ai_errors import ai_failure
 from app.api.deps import get_current_user, get_document_in_workspace, get_workspace_for_member
 from app.core.db import get_db
 from app.models.document import Document
@@ -44,12 +45,10 @@ def run_extraction(
         )
     try:
         result = extract_actions(db, document)
-    except LLMError:
+    except LLMError as error:
         # Details go to the server log; the person gets a message they can act on.
         logger.exception("Extracting actions failed")
-        raise HTTPException(
-            status_code=503, detail="Couldn't find actions right now. Try again in a minute."
-        )
+        raise ai_failure(error, "Couldn't find actions")
     return {
         "extracted_at": document.actions_extracted_at,
         "actions": list_actions(db, document_id=document.id),

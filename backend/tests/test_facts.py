@@ -338,6 +338,19 @@ def test_extraction_when_gemini_fails_is_503_and_keeps_old_facts(client, fake_ge
     assert len(client.get(facts_url(workspace_id, document_id)).json()["facts"]) == 1
 
 
+def test_extraction_over_a_usage_limit_is_429(client, fake_gemini_json):
+    workspace_id, document_id = lease(client)
+    fake_gemini_json(llm.LLMError("Gemini could not answer: 429", llm.LIMIT, 55))
+
+    response = client.post(facts_url(workspace_id, document_id))
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == (
+        "Couldn't extract key facts: the AI usage limit has been reached. "
+        "Try again in about a minute."
+    )
+
+
 def test_other_users_cannot_read_or_extract_facts(client, fake_gemini_json):
     workspace_id, document_id = lease(client)
     workspace_for(client, "bob@example.com")  # now signed in as Bob
