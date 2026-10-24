@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import Cookie, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -47,3 +48,22 @@ def get_document_in_workspace(
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
     return document
+
+
+def check_chosen_documents(
+    db: Session, workspace: Workspace, document_ids: list[uuid.UUID] | None
+) -> list[uuid.UUID] | None:
+    """The documents a search is limited to; None means all of them. Every
+    chosen id must be a document of this workspace: one from elsewhere gets
+    the same 404 as opening it would."""
+    if document_ids is None:
+        return None
+    if not document_ids:
+        raise HTTPException(status_code=422, detail="Choose at least one document")
+    chosen = set(document_ids)
+    found = db.scalars(
+        select(Document.id).where(Document.id.in_(chosen), Document.workspace_id == workspace.id)
+    ).all()
+    if len(found) != len(chosen):
+        raise HTTPException(status_code=404, detail="Document not found")
+    return list(chosen)

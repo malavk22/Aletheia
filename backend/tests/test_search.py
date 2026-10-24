@@ -1,5 +1,7 @@
 import uuid
 
+import pytest
+
 from docxs import make_docx
 from pdfs import make_pdf
 from test_documents import upload, workspace_for
@@ -311,3 +313,77 @@ def test_rare_word_search_handles_a_web_address(client, db):
     results = rare_word_search(db, manual, "What is at http://router.local:8080/setup?", 10)
 
     assert [result["page_number"] for result in results] == [1]
+
+
+# Choosing documents: search only in some of a workspace's documents.
+
+
+def two_leases(client):
+    """A workspace with two leases that both talk about rent; returns the
+    workspace id and the two document ids."""
+    workspace_id = workspace_for(client, "ada@example.com")
+    flat = upload(client, workspace_id, "flat.pdf", make_pdf("The flat rent is 900 a month.")).json()["id"]
+    shop = upload(client, workspace_id, "shop.pdf", make_pdf("The shop rent is 2000 a month.")).json()["id"]
+    return workspace_id, flat, shop
+
+
+@pytest.mark.parametrize("mode", ["semantic", "keyword"])
+def test_search_in_chosen_documents_only(client, mode):
+    workspace_id, flat, shop = two_leases(client)
+
+    results = search(client, workspace_id, "rent", mode=mode, document_id=[shop]).json()
+
+    assert [result["filename"] for result in results] == ["shop.pdf"]
+
+
+def test_search_in_several_chosen_documents(client):
+    workspace_id, flat, shop = two_leases(client)
+
+    results = search(client, workspace_id, "rent", document_id=[flat, shop]).json()
+
+    assert sorted(result["filename"] for result in results) == ["flat.pdf", "shop.pdf"]
+
+
+def test_choosing_a_document_from_another_workspace_is_404(client):
+    bob_workspace = workspace_for(client, "bob@example.com")
+    bob_doc = upload(client, bob_workspace, "bob.pdf", make_pdf("Bob's rent is secret.")).json()["id"]
+    ada_workspace, flat, shop = two_leases(client)  # now signed in as Ada
+
+    response = search(client, ada_workspace, "rent", document_id=[flat, bob_doc])
+
+    # Same answer as for a document that doesn't exist: nothing is revealed.
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document not found"
+    assert search(client, ada_workspace, "rent", document_id=[str(uuid.uuid4())]).status_code == 404
+
+
+def test_rare_word_search_in_chosen_documents(client, db):
+    report = report_workspace(client, db)
+    other = upload(
+        client, str(report.id), "notes.pdf", make_pdf("The guide booked the room.")
+    ).json()["id"]
+
+    results = rare_word_search(db, report, "who is the guide", 10, [uuid.UUID(other)])
+
+    assert [result["filename"] for result in results] == ["notes.pdf"]
+
+
+def test_a_word_common_in_the_chosen_documents_is_not_rare_there(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    pages = [f"Page {n}: the deposit is held by the landlord." for n in range(1, 5)]
+    lease = upload(client, workspace_id, "lease.pdf", make_pdf(*pages)).json()["id"]
+    upload(client, workspace_id, "manual.pdf", make_pdf(*[f"Router step {n}." for n in range(1, 13)]))
+    ada = db.get(Workspace, uuid.UUID(workspace_id))
+
+    # In the whole workspace "deposit" is in 4 of 16 chunks: rare enough.
+    assert rare_word_search(db, ada, "deposit", 10) != []
+    # In the lease alone it is on every page, so it picks out nothing.
+    assert rare_word_search(db, ada, "deposit", 10, [uuid.UUID(lease)]) == []
+
+
+def test_at_most_100_documents_can_be_chosen(client):
+    workspace_id, flat, shop = two_leases(client)
+
+    response = search(client, workspace_id, "rent", document_id=[str(uuid.uuid4()) for _ in range(101)])
+
+    assert response.status_code == 422

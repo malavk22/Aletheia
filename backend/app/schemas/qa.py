@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel, Field
 
 from app.schemas.search import SearchResult
@@ -5,6 +7,8 @@ from app.schemas.search import SearchResult
 
 class AskRequest(BaseModel):
     question: str = Field(max_length=500)
+    # Only search these documents; left out, all of the workspace's.
+    document_ids: list[uuid.UUID] | None = Field(default=None, max_length=100)
 
 
 class Citation(SearchResult):

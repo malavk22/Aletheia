@@ -383,3 +383,45 @@ def test_nothing_found_means_no_reranking(client, db, monkeypatch):
 
     assert _find_passages(db, workspace(db, workspace_id), "anything") == []
     assert calls == []
+
+
+# Choosing documents for Ask.
+
+
+def test_only_chosen_documents_are_sent(client, db, fake_llm):
+    workspace_id = workspace_for(client, "ada@example.com")
+    upload(client, workspace_id, "flat.pdf", make_pdf("The flat rent is 900 a month."))
+    shop = upload(client, workspace_id, "shop.pdf", make_pdf("The shop rent is 2000 a month.")).json()["id"]
+    calls = fake_llm("Rent is 2000 [1].")
+
+    response = client.post(
+        f"/api/v1/workspaces/{workspace_id}/ask", json={"question": "rent", "document_ids": [shop]}
+    )
+
+    assert response.status_code == 200
+    assert "shop.pdf" in calls[0]["prompt"] and "flat.pdf" not in calls[0]["prompt"]
+    assert [c["filename"] for c in response.json()["citations"]] == ["shop.pdf"]
+
+
+def test_ask_with_a_document_from_another_workspace_is_404(client, db, fake_llm):
+    bob_workspace = workspace_for(client, "bob@example.com")
+    bob_doc = upload(client, bob_workspace, "bob.pdf", make_pdf("Bob's rent is secret.")).json()["id"]
+    ada = lease_workspace(client, db)  # now signed in as Ada
+    calls = fake_llm("unused [1]")
+
+    response = client.post(
+        f"/api/v1/workspaces/{ada.id}/ask", json={"question": "rent", "document_ids": [bob_doc]}
+    )
+
+    assert (response.status_code, response.json()["detail"]) == (404, "Document not found")
+    assert calls == []
+
+
+def test_ask_with_no_documents_chosen_is_422(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    calls = fake_llm("unused [1]")
+
+    response = client.post(f"/api/v1/workspaces/{ada.id}/ask", json={"question": "rent", "document_ids": []})
+
+    assert (response.status_code, response.json()["detail"]) == (422, "Choose at least one document")
+    assert calls == []

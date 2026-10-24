@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.ai_errors import ai_failure
-from app.api.deps import get_workspace_for_member
+from app.api.deps import check_chosen_documents, get_workspace_for_member
 from app.core.db import get_db
 from app.models.workspace import Workspace
 from app.qa.llm import LLMError
@@ -28,8 +28,9 @@ def ask(
     question = body.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="Type a question to ask")
+    document_ids = check_chosen_documents(db, workspace, body.document_ids)
     try:
-        return answer_question(db, workspace, question)
+        return answer_question(db, workspace, question, document_ids)
     except LLMError as error:
         # The details (which may name the model or quote Google's reply) go
         # to the server log; the person gets a message they can act on.

@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import ColumnElement, cast, func, select
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.orm import Session
@@ -11,10 +13,15 @@ from app.models.workspace import Workspace
 # "project" was in 36 of 92 chunks, "hosted" in 14 and "guide" in 4.
 COMMON_SHARE = 0.25
 
+# Documents chosen to search in; None means all of the workspace's.
+Documents = list[uuid.UUID] | None
 
-def semantic_search(db: Session, workspace: Workspace, query: str, limit: int):
-    """The chunks in this workspace closest in meaning to `query`, closest
-    first, each with its document and location.
+
+def semantic_search(
+    db: Session, workspace: Workspace, query: str, limit: int, document_ids: Documents = None
+):
+    """The chunks in this workspace (or in these of its documents) closest in
+    meaning to `query`, closest first, each with its document and location.
 
     Closeness is cosine distance between the question's vector and each
     chunk's vector: 0 = same direction (same meaning), up to 2 = opposite.
@@ -28,12 +35,15 @@ def semantic_search(db: Session, workspace: Workspace, query: str, limit: int):
         score=1 - distance,
         match=DocumentChunk.embedding.is_not(None),
         limit=limit,
+        document_ids=document_ids,
     )
 
 
-def keyword_search(db: Session, workspace: Workspace, query: str, limit: int):
-    """The chunks in this workspace that contain the words of `query`, best
-    match first.
+def keyword_search(
+    db: Session, workspace: Workspace, query: str, limit: int, document_ids: Documents = None
+):
+    """The chunks in this workspace (or in these of its documents) that
+    contain the words of `query`, best match first.
 
     Words are compared by their stems, so "terminate" also finds "terminated"
     and "termination". The query understands web-search style: "quoted
@@ -48,10 +58,13 @@ def keyword_search(db: Session, workspace: Workspace, query: str, limit: int):
         score=func.ts_rank_cd(DocumentChunk.search_words, words),
         match=DocumentChunk.search_words.bool_op("@@")(words),
         limit=limit,
+        document_ids=document_ids,
     )
 
 
-def rare_word_search(db: Session, workspace: Workspace, query: str, limit: int):
+def rare_word_search(
+    db: Session, workspace: Workspace, query: str, limit: int, document_ids: Documents = None
+):
     """The chunks containing any of the question's rare words, best first.
 
     Questions are full of words that say little: "who", "the" (PostgreSQL
@@ -59,13 +72,15 @@ def rare_word_search(db: Session, workspace: Workspace, query: str, limit: int):
     "project" in a project report. Only words in at most COMMON_SHARE of the
     workspace's chunks are searched for, and a chunk needs just one of them,
     so a word missing from the documents ("mentor") doesn't block one that is
-    there ("guide")."""
-    total = _count_chunks(db, workspace)
+    there ("guide"). With `document_ids`, rare means rare in those documents."""
+    total = _count_chunks(db, workspace, document_ids)
     rare = [
         word
         for word in _words(db, query)
         # max(1, …): in a tiny workspace a word found once still counts.
-        if 0 < _count_chunks(db, workspace, _contains(_any_of([word]))) <= max(1, total * COMMON_SHARE)
+        if 0
+        < _count_chunks(db, workspace, document_ids, _contains(_any_of([word])))
+        <= max(1, total * COMMON_SHARE)
     ]
     if not rare:
         return []
@@ -76,6 +91,7 @@ def rare_word_search(db: Session, workspace: Workspace, query: str, limit: int):
         score=func.ts_rank_cd(DocumentChunk.search_words, words),
         match=_contains(words),
         limit=limit,
+        document_ids=document_ids,
     )
 
 
@@ -101,13 +117,23 @@ def _contains(words: ColumnElement) -> ColumnElement[bool]:
     return DocumentChunk.search_words.bool_op("@@")(words)
 
 
-def _count_chunks(db: Session, workspace: Workspace, *conditions) -> int:
+def _count_chunks(db: Session, workspace: Workspace, document_ids: Documents, *conditions) -> int:
     return db.scalar(
         select(func.count())
         .select_from(DocumentChunk)
         .join(Document, Document.id == DocumentChunk.document_id)
-        .where(Document.workspace_id == workspace.id, *conditions)
+        .where(*_scope(workspace, document_ids), *conditions)
     )
+
+
+def _scope(workspace: Workspace, document_ids: Documents) -> list[ColumnElement[bool]]:
+    """This workspace's documents, or only the chosen ones among them. The
+    workspace condition always stays: a chosen id from another workspace
+    matches nothing."""
+    conditions = [Document.workspace_id == workspace.id]
+    if document_ids is not None:
+        conditions.append(Document.id.in_(document_ids))
+    return conditions
 
 
 def _search(
@@ -116,9 +142,10 @@ def _search(
     score: ColumnElement[float],
     match: ColumnElement[bool],
     limit: int,
+    document_ids: Documents,
 ):
-    """Chunks of this workspace that pass `match`, highest `score` first,
-    each with its document and location."""
+    """Chunks of this workspace (or of the chosen documents in it) that pass
+    `match`, highest `score` first, each with its document and location."""
     rows = db.execute(
         select(
             DocumentChunk,
@@ -134,9 +161,9 @@ def _search(
             (DocumentPart.document_id == DocumentChunk.document_id)
             & (DocumentPart.position == DocumentChunk.part_position),
         )
-        # Only this workspace's documents, filtered inside the query itself,
-        # so other workspaces' text is never even read.
-        .where(Document.workspace_id == workspace.id, match)
+        # Only this workspace's documents (or the chosen ones), filtered
+        # inside the query itself, so other text is never even read.
+        .where(*_scope(workspace, document_ids), match)
         # Equal scores are common in keyword search; without a tie-breaker
         # PostgreSQL returns them in any order, so the same question could
         # find different passages from one run to the next.
