@@ -9,6 +9,10 @@ class AskRequest(BaseModel):
     question: str = Field(max_length=500)
     # Only search these documents; left out, all of the workspace's.
     document_ids: list[uuid.UUID] | None = Field(default=None, max_length=100)
+    # With one document chosen: only these of its pages or sections (part
+    # positions, both included); left out, all of them.
+    part_from: int | None = None
+    part_to: int | None = None
 
 
 class Citation(SearchResult):

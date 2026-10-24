@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.workspace import Workspace
 from app.documents import reranking
 from app.qa import llm
-from app.services.search import rare_word_search, semantic_search
+from app.services.search import Parts, rare_word_search, semantic_search
 
 # How many passages the model reads per question: about 6 x 1,000 characters,
 # enough to cover an answer spread over a few pages, small enough to stay
@@ -47,12 +47,16 @@ CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
 
 def answer_question(
-    db: Session, workspace: Workspace, question: str, document_ids: list[uuid.UUID] | None = None
+    db: Session,
+    workspace: Workspace,
+    question: str,
+    document_ids: list[uuid.UUID] | None = None,
+    parts: Parts = None,
 ) -> dict:
     """An answer to `question` written only from this workspace's passages
-    (only from `document_ids`, when given), with the passages it cites.
-    Raises llm.LLMError if the model could not answer."""
-    passages = _find_passages(db, workspace, question, document_ids)
+    (only from `document_ids` and `parts`, when given), with the passages it
+    cites. Raises llm.LLMError if the model could not answer."""
+    passages = _find_passages(db, workspace, question, document_ids, parts)
     if not passages:
         # Nothing to read: no need to ask the model.
         return {"answer": NOT_FOUND, "citations": []}
@@ -71,24 +75,28 @@ def answer_question(
 
 
 def _find_passages(
-    db: Session, workspace: Workspace, question: str, document_ids: list[uuid.UUID] | None = None
+    db: Session,
+    workspace: Workspace,
+    question: str,
+    document_ids: list[uuid.UUID] | None = None,
+    parts: Parts = None,
 ) -> list[dict]:
     """The PASSAGES chunks the model reads. A question with several parts is
     searched whole and part by part, and the lists take turns, so one part
     can't take every place."""
     rankings = [
-        _ranked(db, workspace, text, document_ids) for text in [question, *_parts(question)]
+        _ranked(db, workspace, text, document_ids, parts) for text in [question, *_parts(question)]
     ]
     return _take_turns(rankings)[:PASSAGES]
 
 
-def _ranked(db: Session, workspace: Workspace, text: str, document_ids) -> list[dict]:
+def _ranked(db: Session, workspace: Workspace, text: str, document_ids, parts) -> list[dict]:
     """The passages for `text`, best first: its rare words (they name what
     is asked about) and its meaning (it catches other wording) each rank the
     passages, the two rankings are fused, and a reranker reads the best of
     them with `text` to put them in order."""
-    by_words = rare_word_search(db, workspace, text, CANDIDATES, document_ids)
-    by_meaning = semantic_search(db, workspace, text, CANDIDATES, document_ids)
+    by_words = rare_word_search(db, workspace, text, CANDIDATES, document_ids, parts)
+    by_meaning = semantic_search(db, workspace, text, CANDIDATES, document_ids, parts)
     fused = _fuse(by_words, by_meaning)[:RERANK]
     if not fused:
         return []

@@ -1,11 +1,11 @@
 import uuid
 
 from fastapi import Cookie, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.models.document import Document
+from app.models.document import Document, DocumentPart
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.services.auth import get_user_for_token
@@ -67,3 +67,25 @@ def check_chosen_documents(
     if len(found) != len(chosen):
         raise HTTPException(status_code=404, detail="Document not found")
     return list(chosen)
+
+
+def check_chosen_parts(
+    db: Session, document_ids: list[uuid.UUID] | None, part_from: int | None, part_to: int | None
+) -> tuple[int, int] | None:
+    """The pages or sections (part positions, both included) a search is
+    limited to; None means all. Only within one chosen document (already
+    checked to be this workspace's): page 3 means something else in each
+    document. A missing end means the first or the last part."""
+    if part_from is None and part_to is None:
+        return None
+    if document_ids is None or len(document_ids) != 1:
+        raise HTTPException(
+            status_code=422, detail="Choose one document to search some of its pages or sections"
+        )
+    last = db.scalar(select(func.max(DocumentPart.position)).where(DocumentPart.document_id == document_ids[0]))
+    # Not `part_from or 1`: 0 is a wrong page, not a missing one.
+    first = 1 if part_from is None else part_from
+    final = last if part_to is None else part_to
+    if last is None or not 1 <= first <= final <= last:
+        raise HTTPException(status_code=422, detail="Choose pages or sections that are in the document")
+    return first, final

@@ -507,3 +507,29 @@ def test_an_answer_can_cite_two_documents(client, db, monkeypatch):
     cited = {c["filename"]: c["text"] for c in result["citations"]}
     assert set(cited) == {"lease.pdf", "router.pdf"}
     assert "500" in cited["lease.pdf"] and "192.168.8.1" in cited["router.pdf"]
+
+
+def test_only_chosen_pages_are_sent(client, db, fake_llm):
+    workspace_id = workspace_for(client, "ada@example.com")
+    pages = [f"Page {n}: the rent clause number {n}." for n in range(1, 5)]
+    lease = upload(client, workspace_id, "lease.pdf", make_pdf(*pages)).json()["id"]
+    calls = fake_llm("Clause 4 [1].")
+
+    response = client.post(
+        f"/api/v1/workspaces/{workspace_id}/ask",
+        json={"question": "rent clause", "document_ids": [lease], "part_from": 4, "part_to": 4},
+    )
+
+    assert response.status_code == 200
+    assert "(lease.pdf, p. 4)" in calls[0]["prompt"]
+    assert "(lease.pdf, p. 1)" not in calls[0]["prompt"] and "(lease.pdf, p. 3)" not in calls[0]["prompt"]
+
+
+def test_ask_with_pages_but_no_document_is_422(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    calls = fake_llm("unused [1]")
+
+    response = client.post(f"/api/v1/workspaces/{ada.id}/ask", json={"question": "rent", "part_from": 1})
+
+    assert response.status_code == 422
+    assert calls == []

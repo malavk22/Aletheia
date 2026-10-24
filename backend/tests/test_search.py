@@ -387,3 +387,83 @@ def test_at_most_100_documents_can_be_chosen(client):
     response = search(client, workspace_id, "rent", document_id=[str(uuid.uuid4()) for _ in range(101)])
 
     assert response.status_code == 422
+
+
+# Choosing pages or sections of one document.
+
+
+def four_page_lease(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    pages = [f"Page {n}: the rent clause number {n}." for n in range(1, 5)]
+    lease = upload(client, workspace_id, "lease.pdf", make_pdf(*pages)).json()["id"]
+    return workspace_id, lease
+
+
+@pytest.mark.parametrize("mode", ["semantic", "keyword"])
+def test_search_in_chosen_pages_only(client, mode):
+    workspace_id, lease = four_page_lease(client)
+
+    results = search(client, workspace_id, "rent clause", mode=mode, document_id=[lease], part_from=2, part_to=3).json()
+
+    assert sorted(result["page_number"] for result in results) == [2, 3]
+
+
+@pytest.mark.parametrize("bounds, pages", [({"part_from": 3}, [3, 4]), ({"part_to": 2}, [1, 2])])
+def test_a_missing_end_means_the_first_or_last_page(client, bounds, pages):
+    workspace_id, lease = four_page_lease(client)
+
+    results = search(client, workspace_id, "rent clause", document_id=[lease], **bounds).json()
+
+    assert sorted(result["page_number"] for result in results) == pages
+
+
+def test_docx_sections_can_be_chosen(client):
+    workspace_id = workspace_for(client, "ada@example.com")
+    content = make_docx(
+        ("heading", "Payment"),
+        ("p", "The rent is paid monthly."),
+        ("heading", "Termination"),
+        ("p", "The rent stops when the agreement ends."),
+    )
+    contract = upload(client, workspace_id, "contract.docx", content).json()["id"]
+    parts = client.get(f"/api/v1/workspaces/{workspace_id}/documents/{contract}/parts").json()
+    termination = next(part["position"] for part in parts if part["heading"] == "Termination")
+
+    results = search(
+        client, workspace_id, "rent", document_id=[contract], part_from=termination, part_to=termination
+    ).json()
+
+    assert [result["heading"] for result in results] == ["Termination"]
+
+
+@pytest.mark.parametrize(
+    "documents, bounds, detail",
+    [
+        ("none", {"part_from": 1}, "Choose one document to search some of its pages or sections"),
+        ("both", {"part_from": 1}, "Choose one document to search some of its pages or sections"),
+        ("one", {"part_from": 0}, "Choose pages or sections that are in the document"),
+        ("one", {"part_to": 5}, "Choose pages or sections that are in the document"),
+        ("one", {"part_from": 3, "part_to": 2}, "Choose pages or sections that are in the document"),
+    ],
+)
+def test_pages_outside_one_document_are_rejected(client, documents, bounds, detail):
+    workspace_id, lease = four_page_lease(client)
+    other = upload(client, workspace_id, "other.pdf", make_pdf("Other rent.")).json()["id"]
+    chosen = {"none": {}, "both": {"document_id": [lease, other]}, "one": {"document_id": [lease]}}[documents]
+
+    response = search(client, workspace_id, "rent", **chosen, **bounds)
+
+    assert (response.status_code, response.json()["detail"]) == (422, detail)
+
+
+def test_a_word_common_in_the_chosen_pages_is_not_rare_there(client, db):
+    workspace_id = workspace_for(client, "ada@example.com")
+    pages = ["The deposit is two months of rent.", "The deposit is returned in 21 days."]
+    pages += [f"Clause {n} of the lease." for n in range(3, 13)]
+    lease = uuid.UUID(upload(client, workspace_id, "lease.pdf", make_pdf(*pages)).json()["id"])
+    ada = db.get(Workspace, uuid.UUID(workspace_id))
+
+    # In the whole lease "deposit" is on 2 of 12 pages: rare enough.
+    assert rare_word_search(db, ada, "deposit", 10, [lease]) != []
+    # On pages 1 to 2 it is everywhere, so it picks out nothing.
+    assert rare_word_search(db, ada, "deposit", 10, [lease], (1, 2)) == []

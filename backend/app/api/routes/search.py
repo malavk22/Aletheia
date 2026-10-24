@@ -4,7 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import check_chosen_documents, get_workspace_for_member
+from app.api.deps import check_chosen_documents, check_chosen_parts, get_workspace_for_member
 from app.core.db import get_db
 from app.models.workspace import Workspace
 from app.schemas.search import SearchResult
@@ -22,11 +22,15 @@ def search(
     limit: int = Query(10, ge=1, le=50),
     # Repeat to choose several: ?document_id=…&document_id=…; left out, all.
     document_id: list[uuid.UUID] | None = Query(None, max_length=100),
+    # With one document chosen: only these of its pages or sections.
+    part_from: int | None = None,
+    part_to: int | None = None,
     workspace: Workspace = Depends(get_workspace_for_member),
     db: Session = Depends(get_db),
 ):
     if not q.strip():
         raise HTTPException(status_code=422, detail="Type something to search for")
     document_ids = check_chosen_documents(db, workspace, document_id)
+    parts = check_chosen_parts(db, document_ids, part_from, part_to)
     run = keyword_search if mode == "keyword" else semantic_search
-    return run(db, workspace, q.strip(), limit, document_ids)
+    return run(db, workspace, q.strip(), limit, document_ids, parts)
