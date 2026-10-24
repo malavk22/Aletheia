@@ -60,8 +60,11 @@ reranker** (a cross-encoder that reads the question and each passage
 together); a question with several parts also searched part by part, so every
 part gets a place. Share of answer pages among the 6 passages Ask reads:
 0.881 → 1.0; the first passage is on an answer page 52% → 90% of the time.
-**Search in** limits Ask and Find passages to chosen documents. When Gemini's
-usage limit is reached, the page says so and when to try again.
+**Search in** limits Ask and Find passages to chosen documents, and within one
+document to a range of pages or sections. Questions comparing two documents
+("who must give longer notice, an employee or a contractor?") are answered
+from both, with a source from each. When Gemini's usage limit is reached, the
+page says so and when to try again.
 
 **Next — V0.9: AI evaluation.** Scoring the answers themselves: citation
 correctness, faithfulness and unsupported claims.
