@@ -24,11 +24,14 @@ from retrieval_set import DOCUMENTS, OTHER_WORKSPACE, QUESTIONS
 from test_documents import upload, workspace_for
 from test_qa import workspace
 
+from sqlalchemy import select
+
 from app.documents import embeddings, reranking
 
 # Imported before the fake fixtures replace them: the real models.
 from app.documents.embeddings import embed_passages, embed_query
 from app.documents.reranking import relevance
+from app.models.document import Document
 from app.services.qa import PASSAGES, _find_passages
 
 # Recorded on 2026-10-23 with the V0.7 retrieval (rare words first, then
@@ -132,6 +135,31 @@ def test_retrieval_scores_at_least_the_last_kept_upgrade(client, db, real_embedd
     checked_workspace = check_workspaces(client, db)
 
     card = scorecard(db, checked_workspace, _find_passages)
+
+    show(card)
+    for score in ("recall@6", "recall@3", "MRR"):
+        assert card["kinds"]["all"][score] >= KEPT[score], score
+
+
+def test_retrieval_in_chosen_documents(client, db, real_embeddings):
+    """Step 4: each question asked in only the documents that hold its
+    answer, as a person who picks them would. Passages must come from those
+    documents only, and scores must not fall below searching everything."""
+    checked_workspace = check_workspaces(client, db)
+    ids = {
+        document.filename: document.id
+        for document in db.scalars(select(Document).where(Document.workspace_id == checked_workspace.id))
+    }
+    chosen = {question: sorted({ids[name] for name, _ in answers}) for question, _, answers in QUESTIONS}
+
+    def in_chosen_documents(db, workspace, question):
+        # The warm-up question is not in the set: it searches everything.
+        document_ids = chosen.get(question, list(ids.values()))
+        passages = _find_passages(db, workspace, question, document_ids)
+        assert {ids[passage["filename"]] for passage in passages} <= set(document_ids), question
+        return passages
+
+    card = scorecard(db, checked_workspace, in_chosen_documents)
 
     show(card)
     for score in ("recall@6", "recall@3", "MRR"):

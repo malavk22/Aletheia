@@ -1,4 +1,5 @@
 import re
+import uuid
 
 from sqlalchemy.orm import Session
 
@@ -38,11 +39,13 @@ Rules:
 CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
 
-def answer_question(db: Session, workspace: Workspace, question: str) -> dict:
-    """An answer to `question` written only from this workspace's passages,
-    with the passages it cites. Raises llm.LLMError if the model could not
-    answer."""
-    passages = _find_passages(db, workspace, question)
+def answer_question(
+    db: Session, workspace: Workspace, question: str, document_ids: list[uuid.UUID] | None = None
+) -> dict:
+    """An answer to `question` written only from this workspace's passages
+    (only from `document_ids`, when given), with the passages it cites.
+    Raises llm.LLMError if the model could not answer."""
+    passages = _find_passages(db, workspace, question, document_ids)
     if not passages:
         # Nothing to read: no need to ask the model.
         return {"answer": NOT_FOUND, "citations": []}
@@ -60,13 +63,15 @@ def answer_question(db: Session, workspace: Workspace, question: str) -> dict:
     return {"answer": answer, "citations": citations}
 
 
-def _find_passages(db: Session, workspace: Workspace, question: str) -> list[dict]:
+def _find_passages(
+    db: Session, workspace: Workspace, question: str, document_ids: list[uuid.UUID] | None = None
+) -> list[dict]:
     """The PASSAGES chunks the model reads: the question's rare words (they
     name what is asked about) and its meaning (it catches other wording)
     each rank the passages, the two rankings are fused, and a reranker reads
     the best of them with the question to pick the final ones."""
-    by_words = rare_word_search(db, workspace, question, limit=CANDIDATES)
-    by_meaning = semantic_search(db, workspace, question, limit=CANDIDATES)
+    by_words = rare_word_search(db, workspace, question, CANDIDATES, document_ids)
+    by_meaning = semantic_search(db, workspace, question, CANDIDATES, document_ids)
     fused = _fuse(by_words, by_meaning)[:RERANK]
     if not fused:
         return []
