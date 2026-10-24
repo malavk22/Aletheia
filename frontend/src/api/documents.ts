@@ -44,6 +44,21 @@ export function deleteDocument(workspaceId: string, documentId: string) {
   return api<void>(`${documentsPath(workspaceId)}/${documentId}`, { method: 'DELETE' })
 }
 
+// One page (PDF) or section (DOCX) of a document, in reading order.
+export type DocumentPart = {
+  position: number
+  page_number: number | null
+  heading: string | null
+}
+
+export function partsKey(workspaceId: string, documentId: string) {
+  return ['workspaces', workspaceId, 'documents', documentId, 'parts']
+}
+
+export function listParts(workspaceId: string, documentId: string) {
+  return api<DocumentPart[]>(`${documentsPath(workspaceId)}/${documentId}/parts`)
+}
+
 // The original file. A plain link to this opens a PDF in the browser and
 // downloads a Word file; the session cookie is sent with it automatically.
 export function documentFileUrl(workspaceId: string, documentId: string) {

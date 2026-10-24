@@ -1,11 +1,13 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import type { FormEvent } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
-import { documentFileUrl, documentsKey, listDocuments } from '../api/documents.ts'
-import type { WorkspaceDocument } from '../api/documents.ts'
+import { documentFileUrl, documentsKey, listDocuments, listParts, partsKey } from '../api/documents.ts'
+import type { DocumentPart, WorkspaceDocument } from '../api/documents.ts'
 import { askQuestion } from '../api/qa.ts'
 import type { Citation } from '../api/qa.ts'
+import type { PartRange } from '../api/search.ts'
 import { Button } from './Button.tsx'
 import { FormError } from './FormError.tsx'
 import { PassageResults, Tag } from './PassageResults.tsx'
@@ -63,11 +65,18 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
   // A chosen document deleted since is dropped; if none is left, all are searched.
   const stillThere = chosen?.filter((id) => ready.some((document) => document.id === id)) ?? []
   const documentIds = stillThere.length > 0 ? stillThere : null
+  // Pages or sections can be chosen within one document: the one ticked, or
+  // the workspace's only one.
+  const single = documentIds?.length === 1 ? documentIds[0] : ready.length === 1 ? ready[0].id : null
+  const [range, setRange] = useState<PartRange | null>(null)
+  const parts = single !== null ? range : null
+  // The backend takes pages only with their document named.
+  const searchedIds = parts && single ? [single] : documentIds
 
   // A mutation, not a query: asking is an action (it calls the AI each time),
   // and an answer is not kept to be shown again later.
   const mutation = useMutation({
-    mutationFn: (text: string) => askQuestion(workspaceId, text, documentIds),
+    mutationFn: (text: string) => askQuestion(workspaceId, text, searchedIds, parts),
   })
 
   function ask(event: FormEvent) {
@@ -90,6 +99,8 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
     const next = checked ? [...current, id] : current.filter((other) => other !== id)
     // Every document ticked is the same as all of them.
     setChosen(next.length === ready.length ? null : next)
+    // Page numbers belong to one document: a new choice starts with all pages.
+    setRange(null)
   }
 
   function clear() {
@@ -147,9 +158,19 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
           </Button>
         </div>
       </form>
-      {/* Choosing documents only matters with two or more. */}
-      {ready.length >= 2 && (
-        <ChooseDocuments documents={ready} documentIds={documentIds} onChoose={choose} />
+      {ready.length >= 1 && (
+        <ChooseDocuments documents={ready} documentIds={documentIds} onChoose={choose}>
+          {single !== null && (
+            // Keyed by the document: its own pages, starting with all of them.
+            <ChooseParts
+              key={single}
+              workspaceId={workspaceId}
+              documentId={single}
+              range={range}
+              onChange={setRange}
+            />
+          )}
+        </ChooseDocuments>
       )}
       <p className="mt-2 text-sm text-ink-muted">
         Ask writes an answer from your documents, with its sources. Find passages lists where
@@ -190,7 +211,8 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
           <PassageResults
             workspaceId={workspaceId}
             query={view.query}
-            documentIds={documentIds}
+            documentIds={searchedIds}
+            parts={parts}
             onClear={clear}
           />
         )}
@@ -204,10 +226,12 @@ function ChooseDocuments({
   documents,
   documentIds,
   onChoose,
+  children,
 }: {
   documents: WorkspaceDocument[]
   documentIds: string[] | null
   onChoose: (id: string, checked: boolean) => void
+  children: ReactNode
 }) {
   const summary =
     documentIds === null
@@ -226,7 +250,7 @@ function ChooseDocuments({
         {documents.map((document) => {
           const checked = documentIds === null || documentIds.includes(document.id)
           // The last ticked box can't be unticked: searching nothing finds nothing.
-          const last = checked && documentIds?.length === 1
+          const last = checked && (documentIds?.length === 1 || documents.length === 1)
           return (
             <label key={document.id} className="flex items-center gap-2">
               <input
@@ -241,8 +265,81 @@ function ChooseDocuments({
           )
         })}
       </fieldset>
+      {children}
     </details>
   )
+}
+
+// "Pages from … to …" (or sections, for a Word file) within one document.
+function ChooseParts({
+  workspaceId,
+  documentId,
+  range,
+  onChange,
+}: {
+  workspaceId: string
+  documentId: string
+  range: PartRange | null
+  onChange: (range: PartRange | null) => void
+}) {
+  const { data: parts } = useQuery({
+    queryKey: partsKey(workspaceId, documentId),
+    queryFn: () => listParts(workspaceId, documentId),
+  })
+  // One page or section has nothing to choose from.
+  if (!parts || parts.length < 2) return null
+
+  const first = parts[0].position
+  const last = parts[parts.length - 1].position
+  const from = range?.from ?? first
+  const to = range?.to ?? last
+  const isPdf = parts[0].page_number !== null
+
+  function set(nextFrom: number, nextTo: number) {
+    // Kept in order: choosing a start after the end moves the end too.
+    const start = Math.min(nextFrom, nextTo)
+    const end = Math.max(nextFrom, nextTo)
+    onChange(start === first && end === last ? null : { from: start, to: end })
+  }
+
+  const select =
+    'rounded-sm border border-line-strong bg-surface px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-accent'
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 border-l-2 border-line pl-4">
+      <span>{isPdf ? 'Pages' : 'Sections'} from</span>
+      <select
+        aria-label={isPdf ? 'First page' : 'First section'}
+        className={select}
+        value={from}
+        onChange={(event) => set(Number(event.target.value), Math.max(Number(event.target.value), to))}
+      >
+        {parts.map((part) => (
+          <option key={part.position} value={part.position}>
+            {partLabel(part)}
+          </option>
+        ))}
+      </select>
+      <span>to</span>
+      <select
+        aria-label={isPdf ? 'Last page' : 'Last section'}
+        className={select}
+        value={to}
+        onChange={(event) => set(Math.min(from, Number(event.target.value)), Number(event.target.value))}
+      >
+        {parts.map((part) => (
+          <option key={part.position} value={part.position}>
+            {partLabel(part)}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function partLabel(part: DocumentPart) {
+  if (part.page_number !== null) return String(part.page_number)
+  return part.heading ?? 'Before the first heading'
 }
 
 function AnswerView({

@@ -19,13 +19,17 @@ export type SearchResult = {
 }
 
 // `documentIds`: only search these documents; null: all of the workspace's.
+// Pages or sections of the one chosen document (positions, both included).
+export type PartRange = { from: number; to: number }
+
 export function searchKey(
   workspaceId: string,
   query: string,
   mode: SearchMode,
   documentIds: string[] | null,
+  parts: PartRange | null,
 ) {
-  return ['workspaces', workspaceId, 'search', mode, query, documentIds]
+  return ['workspaces', workspaceId, 'search', mode, query, documentIds, parts]
 }
 
 // More than are shown: overlapping chunks of one page often match together,
@@ -37,8 +41,13 @@ export function searchWorkspace(
   query: string,
   mode: SearchMode,
   documentIds: string[] | null,
+  parts: PartRange | null,
 ) {
   const params = new URLSearchParams({ q: query, mode, limit: String(FETCH_LIMIT) })
   for (const id of documentIds ?? []) params.append('document_id', id)
+  if (parts) {
+    params.set('part_from', String(parts.from))
+    params.set('part_to', String(parts.to))
+  }
   return api<SearchResult[]>(`/workspaces/${workspaceId}/search?${params}`)
 }

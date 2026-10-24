@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { documentFileUrl } from '../api/documents.ts'
 import { searchKey, searchWorkspace } from '../api/search.ts'
-import type { SearchMode, SearchResult } from '../api/search.ts'
+import type { PartRange, SearchMode, SearchResult } from '../api/search.ts'
 import { Button } from './Button.tsx'
 import { FormError } from './FormError.tsx'
 
@@ -46,12 +46,15 @@ export function PassageResults({
   workspaceId,
   query,
   documentIds,
+  parts,
   onClear,
 }: {
   workspaceId: string
   query: string
   // Only these documents; null: all.
   documentIds: string[] | null
+  // Only these pages or sections of the one chosen document; null: all.
+  parts: PartRange | null
   onClear: () => void
 }) {
   const [mode, setMode] = useState<SearchMode>('semantic')
@@ -59,8 +62,8 @@ export function PassageResults({
 
   // Switching the mode searches the same words again (the mode is in the key).
   const { data: results, isFetching, error } = useQuery({
-    queryKey: searchKey(workspaceId, query, mode, documentIds),
-    queryFn: () => searchWorkspace(workspaceId, query, mode, documentIds),
+    queryKey: searchKey(workspaceId, query, mode, documentIds, parts),
+    queryFn: () => searchWorkspace(workspaceId, query, mode, documentIds, parts),
     select: (found) => onePerPlace(found).slice(0, SHOWN_RESULTS),
   })
 
