@@ -1,8 +1,9 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
-import { documentFileUrl } from '../api/documents.ts'
+import { documentFileUrl, documentsKey, listDocuments } from '../api/documents.ts'
+import type { WorkspaceDocument } from '../api/documents.ts'
 import { askQuestion } from '../api/qa.ts'
 import type { Citation } from '../api/qa.ts'
 import { Button } from './Button.tsx'
@@ -52,9 +53,22 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
   // The source opened by a click on a [n] chip.
   const [selected, setSelected] = useState<number | null>(null)
 
+  // The documents to search in; null: all of them.
+  const [chosen, setChosen] = useState<string[] | null>(null)
+  const { data: documents } = useQuery({
+    queryKey: documentsKey(workspaceId),
+    queryFn: () => listDocuments(workspaceId),
+  })
+  const ready = documents?.filter((document) => document.status === 'ready') ?? []
+  // A chosen document deleted since is dropped; if none is left, all are searched.
+  const stillThere = chosen?.filter((id) => ready.some((document) => document.id === id)) ?? []
+  const documentIds = stillThere.length > 0 ? stillThere : null
+
   // A mutation, not a query: asking is an action (it calls the AI each time),
   // and an answer is not kept to be shown again later.
-  const mutation = useMutation({ mutationFn: (text: string) => askQuestion(workspaceId, text) })
+  const mutation = useMutation({
+    mutationFn: (text: string) => askQuestion(workspaceId, text, documentIds),
+  })
 
   function ask(event: FormEvent) {
     event.preventDefault()
@@ -69,6 +83,13 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
     const text = question.trim()
     if (text === '') return
     setView({ kind: 'passages', query: text })
+  }
+
+  function choose(id: string, checked: boolean) {
+    const current = documentIds ?? ready.map((document) => document.id)
+    const next = checked ? [...current, id] : current.filter((other) => other !== id)
+    // Every document ticked is the same as all of them.
+    setChosen(next.length === ready.length ? null : next)
   }
 
   function clear() {
@@ -126,6 +147,10 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
           </Button>
         </div>
       </form>
+      {/* Choosing documents only matters with two or more. */}
+      {ready.length >= 2 && (
+        <ChooseDocuments documents={ready} documentIds={documentIds} onChoose={choose} />
+      )}
       <p className="mt-2 text-sm text-ink-muted">
         Ask writes an answer from your documents, with its sources. Find passages lists where
         they mention it.
@@ -162,10 +187,61 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
         )}
 
         {view?.kind === 'passages' && (
-          <PassageResults workspaceId={workspaceId} query={view.query} onClear={clear} />
+          <PassageResults
+            workspaceId={workspaceId}
+            query={view.query}
+            documentIds={documentIds}
+            onClear={clear}
+          />
         )}
       </div>
     </section>
+  )
+}
+
+// "Search in: All documents", opening to a tick box per document.
+function ChooseDocuments({
+  documents,
+  documentIds,
+  onChoose,
+}: {
+  documents: WorkspaceDocument[]
+  documentIds: string[] | null
+  onChoose: (id: string, checked: boolean) => void
+}) {
+  const summary =
+    documentIds === null
+      ? 'All documents'
+      : documentIds.length === 1
+        ? documents.find((document) => document.id === documentIds[0])!.filename
+        : `${documentIds.length} of ${documents.length} documents`
+
+  return (
+    <details className="mt-3 text-sm">
+      <summary className="w-fit cursor-pointer rounded-sm text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent">
+        Search in: <span className="font-medium text-ink">{summary}</span>
+      </summary>
+      <fieldset className="mt-2 space-y-1.5 border-l-2 border-line pl-4">
+        <legend className="sr-only">Documents to search in</legend>
+        {documents.map((document) => {
+          const checked = documentIds === null || documentIds.includes(document.id)
+          // The last ticked box can't be unticked: searching nothing finds nothing.
+          const last = checked && documentIds?.length === 1
+          return (
+            <label key={document.id} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={last}
+                onChange={(event) => onChoose(document.id, event.target.checked)}
+                className="accent-accent"
+              />
+              <span className="truncate">{document.filename}</span>
+            </label>
+          )
+        })}
+      </fieldset>
+    </details>
   )
 }
 

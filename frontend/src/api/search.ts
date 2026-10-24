@@ -18,15 +18,27 @@ export type SearchResult = {
   score: number
 }
 
-export function searchKey(workspaceId: string, query: string, mode: SearchMode) {
-  return ['workspaces', workspaceId, 'search', mode, query]
+// `documentIds`: only search these documents; null: all of the workspace's.
+export function searchKey(
+  workspaceId: string,
+  query: string,
+  mode: SearchMode,
+  documentIds: string[] | null,
+) {
+  return ['workspaces', workspaceId, 'search', mode, query, documentIds]
 }
 
 // More than are shown: overlapping chunks of one page often match together,
 // and only the best one per page is shown (see PassageResults).
 const FETCH_LIMIT = 10
 
-export function searchWorkspace(workspaceId: string, query: string, mode: SearchMode) {
+export function searchWorkspace(
+  workspaceId: string,
+  query: string,
+  mode: SearchMode,
+  documentIds: string[] | null,
+) {
   const params = new URLSearchParams({ q: query, mode, limit: String(FETCH_LIMIT) })
+  for (const id of documentIds ?? []) params.append('document_id', id)
   return api<SearchResult[]>(`/workspaces/${workspaceId}/search?${params}`)
 }

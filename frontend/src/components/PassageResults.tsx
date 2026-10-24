@@ -45,10 +45,13 @@ const MODES: { value: SearchMode; label: string; hint: string; summary: string }
 export function PassageResults({
   workspaceId,
   query,
+  documentIds,
   onClear,
 }: {
   workspaceId: string
   query: string
+  // Only these documents; null: all.
+  documentIds: string[] | null
   onClear: () => void
 }) {
   const [mode, setMode] = useState<SearchMode>('semantic')
@@ -56,8 +59,8 @@ export function PassageResults({
 
   // Switching the mode searches the same words again (the mode is in the key).
   const { data: results, isFetching, error } = useQuery({
-    queryKey: searchKey(workspaceId, query, mode),
-    queryFn: () => searchWorkspace(workspaceId, query, mode),
+    queryKey: searchKey(workspaceId, query, mode, documentIds),
+    queryFn: () => searchWorkspace(workspaceId, query, mode, documentIds),
     select: (found) => onePerPlace(found).slice(0, SHOWN_RESULTS),
   })
 

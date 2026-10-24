@@ -12,6 +12,10 @@ export type Answer = {
   citations: Citation[]
 }
 
-export function askQuestion(workspaceId: string, question: string) {
-  return api<Answer>(`/workspaces/${workspaceId}/ask`, { method: 'POST', body: { question } })
+// `documentIds`: only search these documents; null: all of the workspace's.
+export function askQuestion(workspaceId: string, question: string, documentIds: string[] | null) {
+  return api<Answer>(`/workspaces/${workspaceId}/ask`, {
+    method: 'POST',
+    body: { question, document_ids: documentIds },
+  })
 }
