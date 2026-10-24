@@ -1,3 +1,4 @@
+import re
 import uuid
 
 import pytest
@@ -8,7 +9,7 @@ from test_documents import upload, workspace_for
 from app.models.workspace import Workspace
 from app.documents import reranking
 from app.qa import llm
-from app.services.qa import NOT_FOUND, PASSAGES, RERANK, _find_passages, _fuse, answer_question
+from app.services.qa import NOT_FOUND, PASSAGES, RERANK, _find_passages, _fuse, _parts, _take_turns, answer_question
 
 # Passages are found with the fake embedder from conftest.py (shared words),
 # and the model is a fake too: these tests check what Aletheia sends to the
@@ -425,3 +426,84 @@ def test_ask_with_no_documents_chosen_is_422(client, db, fake_llm):
 
     assert (response.status_code, response.json()["detail"]) == (422, "Choose at least one document")
     assert calls == []
+
+
+# Questions with several parts: searched whole and part by part.
+
+
+@pytest.mark.parametrize(
+    "question, parts",
+    [
+        ("What is the rent, and the deposit?", ["What is the rent", "the deposit"]),
+        ("the AX-300 address, the AX-500 address and the late fee", ["the AX-300 address", "the AX-500 address", "the late fee"]),
+        ("When does it start? Who pays the bills?", ["When does it start", "Who pays the bills"]),
+        # One part: nothing to split.
+        ("What happens to claims over 20,000 rupees?", []),
+        ("Can I keep a cat in the flat?", []),
+        # At most 4 parts.
+        ("a, b, c, d, e and f", ["a", "b", "c", "d"]),
+    ],
+)
+def test_a_question_is_split_into_its_parts(question, parts):
+    assert _parts(question) == parts
+
+
+def test_rankings_take_turns_and_each_passage_comes_once():
+    turns = _take_turns([ranked("a", "b", "c"), ranked("x", "a"), ranked("y")])
+
+    assert [p["chunk_position"] for p in turns] == ["a", "x", "y", "b", "c"]
+
+
+def test_each_part_of_a_question_gets_a_place(client, db, monkeypatch):
+    workspace_id = workspace_for(client, "ada@example.com")
+    pages = [f"Router setting {n} is in the router admin page." for n in range(1, 9)]
+    upload(client, workspace_id, "router.pdf", make_pdf(*pages))
+    upload(client, workspace_id, "lease.pdf", make_pdf("The late fee for rent is 500 a day."))
+    # A reranker that scores the words a passage shares with the text: the
+    # whole question shares most with the router pages.
+    def relevance(question, texts):
+        words = set(question.lower().split())
+        return [float(len(words & set(text.lower().strip(".").split()))) for text in texts]
+
+    monkeypatch.setattr(reranking, "relevance", relevance)
+
+    passages = _find_passages(
+        db, workspace(db, workspace_id), "Which router setting is in the admin page, and the late fee for rent?"
+    )
+
+    # Searched whole, the router pages would fill all six places.
+    assert "lease.pdf" in [p["filename"] for p in passages]
+    assert len(passages) == PASSAGES
+
+
+def test_a_question_with_one_part_is_searched_once(client, db, monkeypatch):
+    workspace_id = workspace_for(client, "ada@example.com")
+    upload(client, workspace_id, "lease.pdf", make_pdf("The late fee for rent is 500 a day."))
+    calls = []
+    monkeypatch.setattr(reranking, "relevance", lambda question, texts: calls.append(question) or [0.0] * len(texts))
+
+    _find_passages(db, workspace(db, workspace_id), "What is the late fee?")
+
+    assert calls == ["What is the late fee?"]
+
+
+def test_an_answer_can_cite_two_documents(client, db, monkeypatch):
+    workspace_id = workspace_for(client, "ada@example.com")
+    upload(client, workspace_id, "lease.pdf", make_pdf("The late fee for rent is 500 a day."))
+    upload(client, workspace_id, "router.pdf", make_pdf("The router admin address is 192.168.8.1."))
+
+    def generate(instructions, prompt):
+        # Cites each document by the number it was given in the prompt.
+        lease = re.search(r"\[(\d+)\] \(lease\.pdf", prompt).group(1)
+        router = re.search(r"\[(\d+)\] \(router\.pdf", prompt).group(1)
+        return f"The fee is 500 a day [{lease}]. The address is 192.168.8.1 [{router}]."
+
+    monkeypatch.setattr(llm, "generate", generate)
+
+    result = answer_question(
+        db, workspace(db, workspace_id), "What is the late fee for rent, and the router admin address?"
+    )
+
+    cited = {c["filename"]: c["text"] for c in result["citations"]}
+    assert set(cited) == {"lease.pdf", "router.pdf"}
+    assert "500" in cited["lease.pdf"] and "192.168.8.1" in cited["router.pdf"]

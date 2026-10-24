@@ -20,7 +20,7 @@ import time
 
 import pytest
 from pdfs import make_pdf
-from retrieval_set import DOCUMENTS, OTHER_WORKSPACE, QUESTIONS
+from retrieval_set import DOCUMENTS, MANY_PARTS, OTHER_WORKSPACE, QUESTIONS
 from test_documents import upload, workspace_for
 from test_qa import workspace
 
@@ -49,7 +49,16 @@ BASELINE = {"recall@6": 0.881, "recall@3": 0.726, "MRR": 0.668}
 # Step 3, a local reranker reads the 20 best fused passages, below. By kind,
 # recall@6 1.0 for all; hit@1 0.905; median 1,087 ms a question (the
 # reranker is about 50 ms a passage on a 4-core CPU).
-KEPT = {"recall@6": 1.0, "recall@3": 0.988, "MRR": 0.952}
+# recall@6 1.0, recall@3 0.988, MRR 0.952.
+# Step 5, a question with several parts also searched part by part, below:
+# hit@1 0.905; median 650 ms a question (unchanged: one-part questions
+# aren't split), 1.9 s for two-part ones.
+KEPT = {"recall@6": 1.0, "recall@3": 1.0, "MRR": 0.952}
+
+# MANY_PARTS (questions with three or four parts), recorded on 2026-10-24.
+# Before step 5: recall@6 0.917, recall@3 0.812, all parts 0.75; median
+# 610 ms. With step 5, below: all parts 0.875; median 2.5 s.
+MANY_PARTS_KEPT = {"recall@6": 0.958, "recall@3": 0.844, "all parts": 0.875}
 
 
 @pytest.fixture
@@ -75,11 +84,11 @@ def check_workspaces(client, db):
     return workspace(db, mine_id)
 
 
-def scorecard(db, checked_workspace, retrieve) -> dict:
-    """Every question of the set through `retrieve`, scored."""
+def scorecard(db, checked_workspace, retrieve, questions=QUESTIONS) -> dict:
+    """Every question of `questions` through `retrieve`, scored."""
     retrieve(db, checked_workspace, "warm up")  # loads the model before timing
     rows = []
-    for question, kind, answers in QUESTIONS:
+    for question, kind, answers in questions:
         start = time.perf_counter()
         passages = retrieve(db, checked_workspace, question)
         milliseconds = (time.perf_counter() - start) * 1000
@@ -164,3 +173,15 @@ def test_retrieval_in_chosen_documents(client, db, real_embeddings):
     show(card)
     for score in ("recall@6", "recall@3", "MRR"):
         assert card["kinds"]["all"][score] >= KEPT[score], score
+
+
+def test_many_part_questions(client, db, real_embeddings):
+    """Step 5: questions with three or four parts (MANY_PARTS), scored apart
+    from the 42, with every part's page counted."""
+    checked_workspace = check_workspaces(client, db)
+
+    card = scorecard(db, checked_workspace, _find_passages, MANY_PARTS)
+
+    show(card)
+    for score in MANY_PARTS_KEPT:
+        assert card["kinds"]["all"][score] >= MANY_PARTS_KEPT[score], score

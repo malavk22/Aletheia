@@ -23,6 +23,13 @@ RRF_K = 60
 # PASSAGES are kept.
 RERANK = 20
 
+# A question with several parts ("the AX-300 address, and the late fee") is
+# also searched part by part. Split at ", ", " and " or between two
+# questions; not at a comma inside a number ("20,000"). At most MAX_PARTS
+# parts, since each one is another search and another reranking.
+PART_BREAK = re.compile(r",\s+(?:and\s+)?|\s+and\s+|\?\s+", re.IGNORECASE)
+MAX_PARTS = 4
+
 NOT_FOUND = "The documents in this workspace don't answer this question."
 
 INSTRUCTIONS = f"""You answer questions about a person's documents.
@@ -66,19 +73,52 @@ def answer_question(
 def _find_passages(
     db: Session, workspace: Workspace, question: str, document_ids: list[uuid.UUID] | None = None
 ) -> list[dict]:
-    """The PASSAGES chunks the model reads: the question's rare words (they
-    name what is asked about) and its meaning (it catches other wording)
-    each rank the passages, the two rankings are fused, and a reranker reads
-    the best of them with the question to pick the final ones."""
-    by_words = rare_word_search(db, workspace, question, CANDIDATES, document_ids)
-    by_meaning = semantic_search(db, workspace, question, CANDIDATES, document_ids)
+    """The PASSAGES chunks the model reads. A question with several parts is
+    searched whole and part by part, and the lists take turns, so one part
+    can't take every place."""
+    rankings = [
+        _ranked(db, workspace, text, document_ids) for text in [question, *_parts(question)]
+    ]
+    return _take_turns(rankings)[:PASSAGES]
+
+
+def _ranked(db: Session, workspace: Workspace, text: str, document_ids) -> list[dict]:
+    """The passages for `text`, best first: its rare words (they name what
+    is asked about) and its meaning (it catches other wording) each rank the
+    passages, the two rankings are fused, and a reranker reads the best of
+    them with `text` to put them in order."""
+    by_words = rare_word_search(db, workspace, text, CANDIDATES, document_ids)
+    by_meaning = semantic_search(db, workspace, text, CANDIDATES, document_ids)
     fused = _fuse(by_words, by_meaning)[:RERANK]
     if not fused:
         return []
-    scores = reranking.relevance(question, [passage["text"] for passage in fused])
+    scores = reranking.relevance(text, [passage["text"] for passage in fused])
     # sorted() keeps the fused order for equal scores.
     order = sorted(range(len(fused)), key=lambda index: -scores[index])
-    return [fused[index] for index in order[:PASSAGES]]
+    return [fused[index] for index in order]
+
+
+def _parts(question: str) -> list[str]:
+    """The parts of a question with several ("What is the rent, and the
+    deposit?" -> "What is the rent", "the deposit"); none if it has one.
+    A part can lack its topic ("employees" in "the notice period for
+    tenants, employees, and contractors"): the whole question is searched
+    too, for that."""
+    parts = [part.strip(" ?.") for part in PART_BREAK.split(question)]
+    parts = [part for part in parts if part]
+    return parts[:MAX_PARTS] if len(parts) > 1 else []
+
+
+def _take_turns(rankings: list[list[dict]]) -> list[dict]:
+    """The rankings' passages, first of each list, then second of each, and
+    so on, each passage once."""
+    taken: dict[tuple, dict] = {}
+    for rank in range(max(map(len, rankings), default=0)):
+        for ranking in rankings:
+            if rank < len(ranking):
+                passage = ranking[rank]
+                taken.setdefault((passage["document_id"], passage["chunk_position"]), passage)
+    return list(taken.values())
 
 
 def _fuse(*rankings: list[dict]) -> list[dict]:
