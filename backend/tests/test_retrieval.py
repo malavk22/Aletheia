@@ -20,7 +20,7 @@ import time
 
 import pytest
 from pdfs import make_pdf
-from retrieval_set import DOCUMENTS, MANY_PARTS, OTHER_WORKSPACE, QUESTIONS
+from retrieval_set import COMPARE, DOCUMENTS, MANY_PARTS, OTHER_WORKSPACE, QUESTIONS
 from test_documents import upload, workspace_for
 from test_qa import workspace
 
@@ -59,6 +59,11 @@ KEPT = {"recall@6": 1.0, "recall@3": 1.0, "MRR": 0.952}
 # Before step 5: recall@6 0.917, recall@3 0.812, all parts 0.75; median
 # 610 ms. With step 5, below: all parts 0.875; median 2.5 s.
 MANY_PARTS_KEPT = {"recall@6": 0.958, "recall@3": 0.844, "all parts": 0.875}
+
+# COMPARE (comparisons across two documents), recorded on 2026-10-24 with
+# step 5's retrieval: both documents' pages found for every question;
+# recall@3 0.9; median 576 ms.
+COMPARE_KEPT = {"recall@6": 1.0, "recall@3": 0.9, "all parts": 1.0}
 
 
 @pytest.fixture
@@ -185,3 +190,15 @@ def test_many_part_questions(client, db, real_embeddings):
     show(card)
     for score in MANY_PARTS_KEPT:
         assert card["kinds"]["all"][score] >= MANY_PARTS_KEPT[score], score
+
+
+def test_comparison_questions(client, db, real_embeddings):
+    """Comparisons across documents (COMPARE): both documents' pages must be
+    among the passages, or the model can't compare them."""
+    checked_workspace = check_workspaces(client, db)
+
+    card = scorecard(db, checked_workspace, _find_passages, COMPARE)
+
+    show(card)
+    for score in COMPARE_KEPT:
+        assert card["kinds"]["all"][score] >= COMPARE_KEPT[score], score

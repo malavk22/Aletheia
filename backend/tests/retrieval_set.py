@@ -395,3 +395,34 @@ MANY_PARTS = [
         [("hr-policy.pdf", 2), ("hr-policy.pdf", 3), ("contractor-policy.pdf", 1)],
     ),
 ]
+
+# V0.8: comparisons across documents. The answer needs a page from each
+# document, and only the model can compare them; several have no "and" or
+# comma, so question splitting doesn't help them. Written before scoring.
+COMPARE = [
+    (
+        "Who must give longer notice to leave: an employee or a contractor?",
+        "compare",
+        [("hr-policy.pdf", 4), ("contractor-policy.pdf", 3)],
+    ),
+    (
+        "Which router supports more connected devices, the AX-300 or the AX-500?",
+        "compare",
+        [("router-manual.pdf", 1), ("router-ax500-manual.pdf", 1)],
+    ),
+    (
+        "Is the AX-500 warranty longer than the AX-300 warranty?",
+        "compare",
+        [("router-manual.pdf", 5), ("router-ax500-manual.pdf", 5)],
+    ),
+    (
+        "Do employees or contractors have to change their passwords more often?",
+        "compare",
+        [("hr-policy.pdf", 5), ("contractor-policy.pdf", 4)],
+    ),
+    (
+        "Which costs more per month: the flat's rent or the health insurance premium?",
+        "compare",
+        [("lease.pdf", 2), ("insurance-policy.pdf", 1)],
+    ),
+]
