@@ -52,14 +52,26 @@ confirms it; confirmed actions of the whole workspace are listed as
 fixed date**. A finished action is marked **done**: it leaves Upcoming and stays
 in the Timeline. Reminders are shown in the app only (no email or phone).
 
-**Next — V0.8: advanced RAG.** Hybrid retrieval, reranking, section filters and
-questions across several documents.
+**V0.8 — Advanced RAG (done).** Ask finds its passages in several steps,
+each kept only because it scored better on a fixed set of 42 test questions
+(`backend/tests/retrieval_set.py`): search by rare words and by meaning,
+combined by reciprocal rank fusion; the 20 best re-ordered by a **local
+reranker** (a cross-encoder that reads the question and each passage
+together); a question with several parts also searched part by part, so every
+part gets a place. Share of answer pages among the 6 passages Ask reads:
+0.881 → 1.0; the first passage is on an answer page 52% → 90% of the time.
+**Search in** limits Ask and Find passages to chosen documents. When Gemini's
+usage limit is reached, the page says so and when to try again.
+
+**Next — V0.9: AI evaluation.** Scoring the answers themselves: citation
+correctness, faithfulness and unsupported claims.
 
 ## Tech stack
 
 - **Backend:** Python, FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Database:** PostgreSQL + pgvector (vector search), full-text search
-- **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), Tesseract OCR,
+- **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), local reranker
+  (`Xenova/ms-marco-MiniLM-L-6-v2`, a cross-encoder, via fastembed), Tesseract OCR,
   Google Gemini for answers, key facts, conflict checks and actions (`google-genai`)
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 
@@ -102,6 +114,9 @@ pytest                          # run tests
 The first document processed downloads the embedding model
 (`BAAI/bge-small-en-v1.5`, about 67 MB) into `backend/models/`. It runs on
 the CPU; uploading, reading and searching documents never uses an outside service.
+The first question asked downloads the reranker (`Xenova/ms-marco-MiniLM-L-6-v2`,
+about 80 MB) into the same folder; it also runs on the CPU, and adds 1–3 s to
+an answer (more for a question with several parts).
 
 Answers to questions are written by Google Gemini. Get a free API key at
 [aistudio.google.com](https://aistudio.google.com) and add `GEMINI_API_KEY=...`
