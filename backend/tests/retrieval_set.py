@@ -343,3 +343,55 @@ QUESTIONS = [
         [("hr-policy.pdf", 4), ("contractor-policy.pdf", 3)],
     ),
 ]
+
+# Step 5 (V0.8): questions with three or four parts, often in different
+# documents, so the parts compete for the PASSAGES places. Kept apart from
+# QUESTIONS, whose scores are already recorded; written before any
+# question-splitting was tried. Some share one ending ("for tenants,
+# employees, and contractors"), which splitting on "and" or commas alone
+# would cut into parts without a topic.
+MANY_PARTS = [
+    (
+        "What is the AX-300 admin address, the AX-500 admin address, and the late fee for rent?",
+        "many parts",
+        [("router-manual.pdf", 2), ("router-ax500-manual.pdf", 2), ("lease.pdf", 2)],
+    ),
+    (
+        "How long is the notice period for tenants, employees, and contractors?",
+        "many parts",
+        [("lease.pdf", 5), ("hr-policy.pdf", 4), ("contractor-policy.pdf", 3)],
+    ),
+    (
+        "What is the meal allowance for work travel, the room rent limit in the health insurance, "
+        "and the longest stay for guests in the flat?",
+        "many parts",
+        [("hr-policy.pdf", 3), ("insurance-policy.pdf", 2), ("lease.pdf", 3)],
+    ),
+    (
+        "How long is the warranty of the AX-300 and of the AX-500, and when does the insurance policy end?",
+        "many parts",
+        [("router-manual.pdf", 5), ("router-ax500-manual.pdf", 5), ("insurance-policy.pdf", 1)],
+    ),
+    (
+        "What is the rent, the insurance premium, the Falcon budget, and the deadline for contractor invoices?",
+        "many parts",
+        [("lease.pdf", 2), ("insurance-policy.pdf", 1), ("meeting-notes.pdf", 1), ("contractor-policy.pdf", 2)],
+    ),
+    (
+        "How soon must I report a fault in the flat, a lost laptop at work, and an emergency hospital "
+        "admission to the insurer?",
+        "many parts",
+        [("lease.pdf", 4), ("hr-policy.pdf", 5), ("insurance-policy.pdf", 4)],
+    ),
+    (
+        "How do I reset the AX-300 and the AX-500, and how often must contractors change their passwords?",
+        "many parts",
+        [("router-manual.pdf", 4), ("router-ax500-manual.pdf", 4), ("contractor-policy.pdf", 4)],
+    ),
+    (
+        "How much sick leave do employees get, when must expense claims be sent, and what leave do "
+        "contractors get?",
+        "many parts",
+        [("hr-policy.pdf", 2), ("hr-policy.pdf", 3), ("contractor-policy.pdf", 1)],
+    ),
+]
