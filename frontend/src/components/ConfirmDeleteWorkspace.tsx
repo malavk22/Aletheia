@@ -63,7 +63,7 @@ export function ConfirmDeleteWorkspace({
         <Button type="submit" variant="danger" disabled={!nameMatches} loading={mutation.isPending}>
           Delete permanently
         </Button>
-        <Button variant="secondary" disabled={mutation.isPending} onClick={onCancel}>
+        <Button variant="ghost" disabled={mutation.isPending} onClick={onCancel}>
           Cancel
         </Button>
       </div>

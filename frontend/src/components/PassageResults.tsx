@@ -76,7 +76,7 @@ export function PassageResults({
             <label
               key={option.value}
               className={`cursor-pointer rounded-[3px] px-3 py-1 text-sm font-medium has-focus-visible:outline-2 has-focus-visible:outline-accent ${
-                mode === option.value ? 'bg-accent text-white' : 'text-ink-muted hover:text-ink'
+                mode === option.value ? 'bg-accent text-on-fill' : 'text-ink-muted hover:text-ink'
               }`}
             >
               <input

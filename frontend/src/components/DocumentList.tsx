@@ -50,7 +50,7 @@ export function DocumentList({ workspaceId }: { workspaceId: string }) {
         </p>
       )}
       {documents && documents.length > 0 && (
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="divide-y divide-line rounded-lg border border-line bg-surface shadow-xs">
           {documents.map((document) => (
             <DocumentRow key={document.id} workspaceId={workspaceId} document={document} />
           ))}
@@ -90,7 +90,7 @@ function DocumentRow({
   const isPdf = document.content_type === 'application/pdf'
 
   return (
-    <li className="py-3">
+    <li className="px-4 py-3">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           {/* Opens the original file: a PDF in a new tab, a Word file downloads

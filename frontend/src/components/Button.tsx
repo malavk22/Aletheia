@@ -1,15 +1,18 @@
 import type { ButtonHTMLAttributes } from 'react'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'danger'
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   loading?: boolean
 }
 
+// One primary per screen: the thing to do next. Secondary for the others,
+// ghost for the least important (Log out, Cancel).
 const variants = {
-  primary: 'bg-accent text-white hover:bg-accent-hover',
-  secondary: 'border border-line-strong bg-surface text-ink hover:bg-paper-deep',
+  primary: 'bg-accent text-on-fill shadow-sm hover:bg-accent-hover',
+  secondary: 'border border-line-strong/50 bg-surface text-ink shadow-xs hover:border-line-strong',
+  ghost: 'text-ink-muted hover:bg-paper-deep hover:text-ink',
   // Only for actions that destroy data.
-  danger: 'bg-danger text-white hover:bg-danger/90',
+  danger: 'bg-danger text-on-fill hover:bg-danger/90',
 }
 
 export function Button({

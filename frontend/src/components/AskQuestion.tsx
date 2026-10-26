@@ -459,7 +459,7 @@ function WithChips({
         onClick={() => onSelect(label)}
         aria-label={`Source ${label}`}
         className={`mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-sm px-1 align-text-top text-xs font-semibold focus-visible:outline-2 focus-visible:outline-accent ${
-          selected === label ? 'bg-accent text-white' : 'bg-paper-deep text-accent hover:bg-line'
+          selected === label ? 'bg-accent text-on-fill' : 'bg-paper-deep text-accent hover:bg-line'
         }`}
       >
         {label}
@@ -492,7 +492,7 @@ function SourceItem({
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <span
             className={`inline-flex h-5 min-w-5 items-center justify-center rounded-sm px-1 text-xs font-semibold ${
-              selected ? 'bg-accent text-white' : 'bg-paper-deep text-accent'
+              selected ? 'bg-accent text-on-fill' : 'bg-paper-deep text-accent'
             }`}
           >
             {source.label}

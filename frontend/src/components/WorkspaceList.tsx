@@ -35,7 +35,7 @@ export function WorkspaceList() {
         </p>
       )}
       {workspaces && workspaces.length > 0 && (
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="divide-y divide-line rounded-lg border border-line bg-surface shadow-xs">
           {workspaces.map((workspace) => (
             <WorkspaceRow key={workspace.id} workspace={workspace} />
           ))}
@@ -49,7 +49,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
   const [confirming, setConfirming] = useState(false)
 
   return (
-    <li>
+    <li className="px-4">
       <div className="flex items-center gap-2">
         <Link
           to={`/workspaces/${workspace.id}`}

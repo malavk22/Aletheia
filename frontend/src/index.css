@@ -8,15 +8,20 @@
   /* Used only by the large wordmark. To try another typeface, change this line. */
   --font-display: 'Newsreader Variable', Georgia, serif;
 
-  --color-paper: #faf9f6;
-  --color-paper-deep: #f2f0ea;
+  /* Light values here; dark ones below. */
+  --color-paper: #f8f7f3;
+  --color-paper-deep: #f0eee7;
   --color-surface: #ffffff;
   --color-ink: #1b1a17;
   --color-ink-muted: #5e5b54;
-  --color-line: #dedbd3;
+  /* line: dividers and quiet edges. line-strong: input borders (3:1). */
+  --color-line: #e5e2da;
   --color-line-strong: #8a867b;
+  /* The one accent: links, the main button, the open tab. */
   --color-accent: #1f3a5f;
   --color-accent-hover: #172c49;
+  /* Text on a filled accent or danger button. */
+  --color-on-fill: #ffffff;
   --color-danger: #9b2c1f;
   --color-danger-soft: #fbedea;
   /* Text added in a newer version (Compare); removed text uses danger. */
@@ -24,6 +29,9 @@
   --color-added-soft: #e4efdf;
   /* Marks the words that matched a search, like a highlighter pen. */
   --color-highlight: #f3e2ad;
+
+  /* Slightly softer corners for every control that uses rounded-sm. */
+  --radius-sm: 0.375rem;
 
   /* "both" keeps an element transparent before its turn and visible afterwards. */
   --animate-fade-in: fade-in 1s ease-in-out both;
@@ -35,6 +43,29 @@
     to {
       opacity: 1;
     }
+  }
+}
+
+/* Dark mode follows the system setting. Same names, so every component
+   switches without changes. All text pairs keep at least 4.5:1 contrast. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-paper: #121211;
+    --color-paper-deep: #1b1a18;
+    --color-surface: #1d1c1a;
+    --color-ink: #ebe9e3;
+    --color-ink-muted: #a29e94;
+    --color-line: #2e2c28;
+    --color-line-strong: #6e6a61;
+    --color-accent: #a9c1ec;
+    --color-accent-hover: #c3d4f2;
+    --color-on-fill: #111a2c;
+    --color-danger: #ef8f80;
+    --color-danger-soft: #3b1f1a;
+    --color-added: #94cf8a;
+    --color-added-soft: #1e3320;
+    --color-highlight: #5e4c14;
   }
 }
 

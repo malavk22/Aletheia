@@ -15,14 +15,15 @@ export function AppHeader() {
   })
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-line px-6 py-3 sm:px-12">
+    // Stays at the top while the page scrolls, over a lightly blurred page.
+    <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-line bg-paper/85 px-6 py-3 backdrop-blur sm:px-12">
       <Link to="/" className="font-display text-2xl font-medium tracking-tight">
         Aletheia
       </Link>
       <div className="flex items-center gap-4">
         {mutation.isError && <span className="text-sm text-danger">{UNREACHABLE_MESSAGE}</span>}
-        <span className="text-sm text-ink-muted">{user?.email}</span>
-        <Button variant="secondary" loading={mutation.isPending} onClick={() => mutation.mutate()}>
+        <span className="hidden text-sm text-ink-muted sm:inline">{user?.email}</span>
+        <Button variant="ghost" loading={mutation.isPending} onClick={() => mutation.mutate()}>
           Log out
         </Button>
       </div>

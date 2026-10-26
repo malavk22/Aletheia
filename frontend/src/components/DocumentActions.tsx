@@ -95,7 +95,7 @@ export function DocumentActions({
           </p>
         </div>
         <Button
-          variant={searched ? 'secondary' : 'primary'}
+          variant="secondary"
           loading={finding.isPending}
           onClick={() => finding.mutate()}
         >
@@ -241,7 +241,7 @@ function ActionCard({ workspaceId, action }: { workspaceId: string; action: Acti
             <>
               <button
                 type="button"
-                className="rounded-sm bg-accent px-3 py-1 text-sm font-medium text-white hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+                className="rounded-sm bg-accent px-3 py-1 text-sm font-medium text-on-fill hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
                 disabled={change.isPending}
                 onClick={() => change.mutate({ status: 'confirmed' })}
               >
@@ -412,7 +412,7 @@ function EditForm({
         <Button type="submit" loading={saving}>
           Save
         </Button>
-        <Button type="button" variant="secondary" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
       </div>

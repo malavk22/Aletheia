@@ -144,7 +144,7 @@ export function KeyFacts({
           {extracted && total > 0 && <span className="font-normal text-ink-muted"> · {total}</span>}
         </h3>
         <Button
-          variant={extracted ? 'secondary' : 'primary'}
+          variant="secondary"
           loading={extraction.isPending}
           onClick={() => extraction.mutate()}
         >
@@ -197,7 +197,7 @@ export function KeyFacts({
                       aria-pressed={kind === shown.kind}
                       className={`rounded-sm px-2.5 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                         kind === shown.kind
-                          ? 'bg-accent text-white'
+                          ? 'bg-accent text-on-fill'
                           : 'border border-line-strong text-ink-muted hover:text-ink'
                       }`}
                       onClick={() => setChosenKind(kind)}
