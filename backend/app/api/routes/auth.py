@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
+from app.api.ai_errors import too_many
 from app.api.deps import SESSION_COOKIE, get_current_user
+from app.core import rate_limit
 from app.core.config import settings
 from app.core.db import get_db
 from app.models.user import User
@@ -18,8 +20,17 @@ from app.services.auth import (
 router = APIRouter(prefix="/auth")
 
 
+def _address(request: Request) -> str:
+    # The address the request came from. Behind a proxy this is the proxy's
+    # address; the deployment must pass the real one on (see the README).
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/register", response_model=UserRead, status_code=201)
-def register(data: UserCreate, db: Session = Depends(get_db)):
+def register(data: UserCreate, request: Request, db: Session = Depends(get_db)):
+    wait = rate_limit.registrations.hit(_address(request))
+    if wait is not None:
+        raise too_many(wait, "new accounts from this address")
     try:
         return register_user(db, data.email, data.password)
     except EmailAlreadyRegistered:
@@ -27,10 +38,17 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=UserRead)
-def login(data: UserLogin, response: Response, db: Session = Depends(get_db)):
+def login(data: UserLogin, request: Request, response: Response, db: Session = Depends(get_db)):
+    address = _address(request)
+    # Checked before the password: once blocked, even the right password
+    # waits, so guessing can't tell when it found it.
+    wait = rate_limit.failed_logins.retry_after(address)
+    if wait is not None:
+        raise too_many(wait, "failed sign-in attempts")
     try:
         user, token = login_user(db, data.email, data.password)
     except InvalidCredentials:
+        rate_limit.failed_logins.record(address)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     response.set_cookie(
         SESSION_COOKIE,

@@ -1,6 +1,6 @@
 import pytest
 
-from app.api.ai_errors import _about
+from app.api.ai_errors import wait_in_words
 
 
 @pytest.mark.parametrize(
@@ -17,4 +17,4 @@ from app.api.ai_errors import _about
     ],
 )
 def test_waits_are_said_in_plain_words(seconds, text):
-    assert _about(seconds) == text
+    assert wait_in_words(seconds) == text

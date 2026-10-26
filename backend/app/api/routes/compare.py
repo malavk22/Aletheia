@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.ai_errors import ai_failure
-from app.api.deps import get_workspace_for_member
+from app.api.deps import get_workspace_for_member, limit_ai_requests
 from app.core.db import get_db
 from app.models.document import Document
 from app.models.workspace import Workspace
@@ -54,6 +54,7 @@ def check_conflicts(
     request: ConflictsRequest,
     workspace: Workspace = Depends(get_workspace_for_member),
     db: Session = Depends(get_db),
+    _limit: None = Depends(limit_ai_requests),
 ):
     # POST: this one sends passages to Gemini.
     documents: list[Document] = _two_documents(

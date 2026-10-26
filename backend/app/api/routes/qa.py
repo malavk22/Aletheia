@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.ai_errors import ai_failure
-from app.api.deps import check_chosen_documents, check_chosen_parts, get_workspace_for_member
+from app.api.deps import (
+    check_chosen_documents,
+    check_chosen_parts,
+    get_workspace_for_member,
+    limit_ai_requests,
+)
 from app.core.db import get_db
 from app.models.workspace import Workspace
 from app.qa.llm import LLMError
@@ -24,6 +29,7 @@ def ask(
     body: AskRequest,
     workspace: Workspace = Depends(get_workspace_for_member),
     db: Session = Depends(get_db),
+    _limit: None = Depends(limit_ai_requests),
 ):
     question = body.question.strip()
     if not question:

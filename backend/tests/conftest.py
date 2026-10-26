@@ -11,6 +11,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
+from app.core import rate_limit
 from app.core.config import settings
 
 # Tests use their own database, never the development one. We take the normal
@@ -91,6 +92,14 @@ def no_gemini_key(monkeypatch):
     # Tests never call the real Gemini (it is slow, rate-limited, and sends
     # text to Google), even when .env holds a real key.
     monkeypatch.setattr(settings, "gemini_api_key", None)
+
+
+@pytest.fixture(autouse=True)
+def fresh_rate_limits():
+    # Counts are kept in memory for the whole process: each test starts
+    # with none, so tests don't limit each other.
+    for limiter in rate_limit.ALL:
+        limiter.reset()
 
 
 @pytest.fixture

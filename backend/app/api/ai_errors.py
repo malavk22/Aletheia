@@ -10,7 +10,7 @@ def ai_failure(error: LLMError, failed: str) -> HTTPException:
     a usage limit is 429 with Retry-After; anything else is 503. The
     details (model names, Google's reply) stay in the server log."""
     if error.kind == LIMIT:
-        when = f"in {_about(error.retry_after)}" if error.retry_after is not None else "later"
+        when = f"in {wait_in_words(error.retry_after)}" if error.retry_after is not None else "later"
         return HTTPException(
             status_code=429,
             detail=f"{failed}: the AI usage limit has been reached. Try again {when}.",
@@ -25,7 +25,17 @@ def ai_failure(error: LLMError, failed: str) -> HTTPException:
     return HTTPException(status_code=503, detail=f"{failed} right now. Try again in a minute.")
 
 
-def _about(seconds: int) -> str:
+def too_many(retry_after: int, what: str) -> HTTPException:
+    """The reply when a rate limit is reached: 429 with Retry-After, and
+    when to try again in words. `what` says what there were too many of."""
+    return HTTPException(
+        status_code=429,
+        detail=f"Too many {what}. Try again in {wait_in_words(retry_after)}.",
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def wait_in_words(seconds: int) -> str:
     """'about a minute', 'about 20 minutes', 'about 16 hours'."""
     if seconds < 90:
         return "about a minute"

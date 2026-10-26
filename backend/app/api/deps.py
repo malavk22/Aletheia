@@ -4,6 +4,8 @@ from fastapi import Cookie, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.ai_errors import too_many
+from app.core import rate_limit
 from app.core.db import get_db
 from app.models.document import Document, DocumentPart
 from app.models.user import User
@@ -23,6 +25,14 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
+
+
+def limit_ai_requests(user: User = Depends(get_current_user)) -> None:
+    """For routes that call Gemini: at most rate_limit.ai_requests a user, so
+    one person can't use up the shared quota."""
+    wait = rate_limit.ai_requests.hit(str(user.id))
+    if wait is not None:
+        raise too_many(wait, "AI requests")
 
 
 def get_workspace_for_member(

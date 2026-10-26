@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.ai_errors import ai_failure
-from app.api.deps import get_current_user, get_document_in_workspace, get_workspace_for_member
+from app.api.deps import (
+    get_current_user,
+    get_document_in_workspace,
+    get_workspace_for_member,
+    limit_ai_requests,
+)
 from app.core.db import get_db
 from app.models.document import Document
 from app.models.user import User
@@ -38,6 +43,7 @@ def read_document_actions(
 def run_extraction(
     document: Document = Depends(get_document_in_workspace),
     db: Session = Depends(get_db),
+    _limit: None = Depends(limit_ai_requests),
 ):
     if document.status != "ready":
         raise HTTPException(

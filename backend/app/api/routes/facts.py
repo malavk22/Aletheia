@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.ai_errors import ai_failure
-from app.api.deps import get_document_in_workspace
+from app.api.deps import get_document_in_workspace, limit_ai_requests
 from app.core.db import get_db
 from app.models.document import Document
 from app.qa.llm import LLMError
@@ -31,6 +31,7 @@ def read_facts(
 def run_extraction(
     document: Document = Depends(get_document_in_workspace),
     db: Session = Depends(get_db),
+    _limit: None = Depends(limit_ai_requests),
 ):
     if document.status != "ready":
         # 409 Conflict: the request is fine, the document isn't in a state
