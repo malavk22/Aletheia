@@ -1,3 +1,6 @@
+import logging
+import re
+from collections import Counter
 from types import SimpleNamespace
 
 import pytest
@@ -252,3 +255,62 @@ def test_when_both_models_fail_the_one_back_soonest_decides(
     assert len(models.calls) == 2
     # Both failures stay in the message, for the server log.
     assert str(main.code) in str(error) and str(fallback.code) in str(error)
+
+
+# The log line for each call.
+
+
+@pytest.fixture
+def gemini_log(monkeypatch, caplog):
+    # The test run's migrations switch off loggers that already exist (see
+    # test_startup); a fresh count for each test.
+    monkeypatch.setattr(llm.logger, "disabled", False)
+    monkeypatch.setattr(llm, "calls_since_start", Counter())
+    caplog.set_level(logging.INFO, logger="app.qa.llm")
+    return caplog
+
+
+def logged(caplog):
+    return [record.getMessage() for record in caplog.records if record.name == "app.qa.llm"]
+
+
+def test_a_call_is_logged_with_its_model_count_and_time(fake_gemini, gemini_log):
+    fake_gemini("An answer.")
+
+    llm.generate("Be brief.", "The secret contract text")
+
+    [line] = logged(gemini_log)
+    assert re.fullmatch(rf"Gemini {MAIN} call 1: ok after \d+ ms", line)
+    # Never the prompt: it holds the documents' text.
+    assert "secret" not in gemini_log.text
+
+
+def test_a_limit_and_the_fallback_are_logged(fake_gemini, gemini_log):
+    fake_gemini(gemini_error(429), "An answer.")
+
+    llm.generate("Be brief.", "Question")
+
+    lines = logged(gemini_log)
+    assert re.fullmatch(rf"Gemini {MAIN} call 1: limit \(HTTP 429\) after \d+ ms", lines[0])
+    assert lines[1] == f"Gemini {MAIN} failed (limit): trying {FALLBACK}"
+    assert re.fullmatch(rf"Gemini {FALLBACK} call 1: ok after \d+ ms", lines[2])
+
+
+def test_no_connection_is_logged_too(fake_gemini, gemini_log):
+    fake_gemini(ConnectionError("offline"))
+
+    with pytest.raises(ConnectionError):
+        llm.generate("Be brief.", "Question")
+
+    [line] = logged(gemini_log)
+    assert re.fullmatch(rf"Gemini {MAIN} call 1: ConnectionError after \d+ ms", line)
+
+
+def test_calls_are_counted_per_model(fake_gemini, gemini_log):
+    fake_gemini("One.", "Two.", gemini_error(503), "Three.")
+
+    for _ in range(3):
+        llm.generate("Be brief.", "Question")
+
+    assert llm.calls_since_start == {MAIN: 3, FALLBACK: 1}
+    assert re.fullmatch(rf"Gemini {MAIN} call 3: temporary \(HTTP 503\) after \d+ ms", logged(gemini_log)[2])

@@ -149,7 +149,7 @@ and set your database password (write `@` in it as `%40`). Then:
 
 ```bash
 alembic upgrade head            # create the tables
-uvicorn app.main:app --reload   # http://localhost:8000/api/v1/health
+uvicorn app.main:app --reload --no-access-log   # http://localhost:8000/api/v1/health
 ```
 
 The embedding model (about 67 MB) and the reranker (about 80 MB) are

@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-3.8-flash"
     # Tried once when the main model is busy or over its free limit.
     llm_fallback_model: str | None = "gemini-2.5-flash"
+    # The app's log lines at this level and above: DEBUG, INFO, WARNING, ERROR.
+    log_level: str = "INFO"
 
 
 settings = Settings()

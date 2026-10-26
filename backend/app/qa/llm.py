@@ -1,12 +1,24 @@
 import json
+import logging
 import math
+import time
+from collections import Counter
 from functools import lru_cache
+from threading import Lock
 from typing import Any
 
 from google import genai
 from google.genai import errors, types
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Calls made to each model since the server started: the log shows how fast
+# the free daily quota (20 a model) is being used. Counted under a lock, as
+# requests run in parallel.
+calls_since_start: Counter[str] = Counter()
+_count_lock = Lock()
 
 # "Too many requests" (free limit) and "busy": worth trying another model.
 # Other errors (bad key, bad request) would fail the same way on any model.
@@ -60,14 +72,15 @@ def _generate(instructions: str, prompt: str, schema: dict | None) -> str:
     if not settings.gemini_api_key:
         raise LLMError("No Gemini API key is set (GEMINI_API_KEY in .env).", REFUSED)
     try:
-        return _call(settings.llm_model, instructions, prompt, schema)
+        return _logged_call(settings.llm_model, instructions, prompt, schema)
     except errors.APIError as error:
         first = _failure(error)
         fallback = settings.llm_fallback_model
         if error.code not in TRY_FALLBACK or fallback in (None, settings.llm_model):
             raise first from error
+    logger.info("Gemini %s failed (%s): trying %s", settings.llm_model, first.kind, fallback)
     try:
-        return _call(fallback, instructions, prompt, schema)
+        return _logged_call(fallback, instructions, prompt, schema)
     except errors.APIError as error:
         raise _both_failed(first, _failure(error)) from error
 
@@ -108,6 +121,34 @@ def _both_failed(main: LLMError, fallback: LLMError) -> LLMError:
         waits = [e.retry_after for e in (main, fallback) if e.kind == LIMIT and e.retry_after is not None]
         return LLMError(message, LIMIT, min(waits) if waits else None)
     return LLMError(message, REFUSED)
+
+
+def _logged_call(model: str, instructions: str, prompt: str, schema: dict | None) -> str:
+    """_call, with one log line: the model, the outcome, the time taken and
+    how many calls that model has had since the server started. Never the
+    prompt or the reply: they hold the documents' text."""
+    with _count_lock:
+        calls_since_start[model] += 1
+        number = calls_since_start[model]
+    start = time.perf_counter()
+    try:
+        reply = _call(model, instructions, prompt, schema)
+    except errors.APIError as error:
+        outcome = f"{_failure(error).kind} (HTTP {error.code})"
+        logger.warning("Gemini %s call %d: %s after %d ms", model, number, outcome, _ms_since(start))
+        raise
+    except Exception as error:
+        # Not an answer from Gemini at all (no connection, say).
+        logger.warning(
+            "Gemini %s call %d: %s after %d ms", model, number, type(error).__name__, _ms_since(start)
+        )
+        raise
+    logger.info("Gemini %s call %d: ok after %d ms", model, number, _ms_since(start))
+    return reply
+
+
+def _ms_since(start: float) -> int:
+    return round((time.perf_counter() - start) * 1000)
 
 
 def _call(model: str, instructions: str, prompt: str, schema: dict | None) -> str:
