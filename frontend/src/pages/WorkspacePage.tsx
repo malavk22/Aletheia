@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
@@ -85,11 +86,20 @@ export function WorkspacePage() {
                   key={t.id}
                   to={`?tab=${t.id}`}
                   aria-current={t.id === tab ? 'page' : undefined}
-                  className={`border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
-                    t.id === tab ? 'border-accent text-ink' : 'border-transparent text-ink-muted hover:text-ink'
+                  className={`relative px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
+                    t.id === tab ? 'text-ink' : 'text-ink-muted hover:text-ink'
                   }`}
                 >
                   {t.label}
+                  {/* One underline that slides from the old tab to the new one
+                      (same layoutId: motion animates it between places). */}
+                  {t.id === tab && (
+                    <motion.span
+                      layoutId="tab-underline"
+                      transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                      className="absolute inset-x-0 bottom-0 h-0.5 bg-accent"
+                    />
+                  )}
                 </Link>
               ))}
             </nav>
@@ -151,6 +161,16 @@ export function WorkspacePage() {
   )
 }
 
+// A tab's content rises in slightly each time it opens.
 function TabPanel({ open, children }: { open: boolean; children: ReactNode }) {
-  return <div hidden={!open}>{children}</div>
+  return (
+    <motion.div
+      hidden={!open}
+      initial={false}
+      animate={open ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+    >
+      {children}
+    </motion.div>
+  )
 }

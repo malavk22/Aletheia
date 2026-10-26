@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { motion } from 'motion/react'
 import { useState } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { documentFileUrl } from '../api/documents.ts'
@@ -135,7 +136,15 @@ export function PassageResults({
             </p>
           )}
           {results.length > 0 && (
-            <ol className="divide-y divide-line">
+            // A new search (words or mode) gives a new key, so its list
+            // fades in afresh.
+            <motion.ol
+              key={`${mode}-${query}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="divide-y divide-line"
+            >
               {results.map((result) => (
                 <SearchResultItem
                   key={`${result.document_id}-${result.chunk_position}`}
@@ -146,7 +155,7 @@ export function PassageResults({
                   terms={mode === 'keyword' ? matchTerms(query) : []}
                 />
               ))}
-            </ol>
+            </motion.ol>
           )}
         </div>
       )}

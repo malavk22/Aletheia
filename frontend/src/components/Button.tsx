@@ -28,7 +28,7 @@ export function Button({
       {...props}
       disabled={disabled || loading}
       aria-busy={loading}
-      className={`inline-flex h-10 items-center justify-center gap-2 rounded-sm px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-60 ${variants[variant]} ${className}`}
+      className={`inline-flex h-10 items-center justify-center gap-2 rounded-sm px-4 text-sm font-medium transition-[color,background-color,border-color,transform] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-60 ${variants[variant]} ${className}`}
     >
       {loading && (
         <span

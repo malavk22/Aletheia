@@ -21,13 +21,11 @@ type ApiOptions = {
 // the Vite dev proxy forwards to FastAPI, so the session cookie is sent
 // automatically.
 export async function api<T>(path: string, { method = 'GET', body }: ApiOptions = {}): Promise<T> {
-  // A FormData body (a file upload) is sent as-is: the browser sets its own
-  // Content-Type. Anything else is sent as JSON.
-  const isForm = body instanceof FormData
+  // A body is sent as JSON. (File uploads use uploadDocument instead.)
   const response = await fetch(`/api/v1${path}`, {
     method,
-    headers: body === undefined || isForm ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
   })
 
   if (!response.ok) {

@@ -1,4 +1,4 @@
-import { api } from './client.ts'
+import { ApiError, api } from './client.ts'
 
 // Named WorkspaceDocument because "Document" is already the browser's own type
 // for the web page.
@@ -34,10 +34,34 @@ export function listDocuments(workspaceId: string) {
   return api<WorkspaceDocument[]>(documentsPath(workspaceId))
 }
 
-export function uploadDocument(workspaceId: string, file: File) {
+// XMLHttpRequest, not fetch (api()): only it reports how much of the file has
+// been sent, for the progress bar. Errors take the same shape as api()'s.
+export function uploadDocument(
+  workspaceId: string,
+  file: File,
+  onProgress: (fraction: number) => void,
+) {
   const form = new FormData()
   form.append('file', file)
-  return api<WorkspaceDocument>(documentsPath(workspaceId), { method: 'POST', body: form })
+  return new Promise<WorkspaceDocument>((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('POST', `/api/v1${documentsPath(workspaceId)}`)
+    request.responseType = 'json'
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded / event.total)
+    }
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve(request.response)
+        return
+      }
+      const detail = request.response?.detail
+      reject(new ApiError(request.status, typeof detail === 'string' ? detail : 'Request failed'))
+    }
+    // No response at all (server down, network lost): like a failed fetch.
+    request.onerror = () => reject(new TypeError('Network error'))
+    request.send(form)
+  })
 }
 
 export function deleteDocument(workspaceId: string, documentId: string) {

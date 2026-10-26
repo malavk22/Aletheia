@@ -1,9 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { motion } from 'motion/react'
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { documentsKey, uploadDocument } from '../api/documents.ts'
 import { Button } from './Button.tsx'
+
+// The file being sent now, and how much of it (0 to 1).
+type Progress = {
+  filename: string
+  number: number
+  total: number
+  fraction: number
+}
 
 type FailedUpload = {
   filename: string
@@ -25,8 +34,12 @@ export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
   // document list itself, so a separate "uploaded" line would only go stale
   // (for example after that document is deleted).
   const [failures, setFailures] = useState<FailedUpload[]>([])
+  const [progress, setProgress] = useState<Progress | null>(null)
   const mutation = useMutation({
-    mutationFn: (file: File) => uploadDocument(workspaceId, file),
+    mutationFn: (file: File) =>
+      uploadDocument(workspaceId, file, (fraction) =>
+        setProgress((current) => current && { ...current, fraction }),
+      ),
     // Refresh the list after each file, so documents appear as they finish.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) }),
   })
@@ -37,7 +50,8 @@ export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
     setFailures([])
 
     // One request per file, one after another, so each gets its own result.
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
+      setProgress({ filename: file.name, number: index + 1, total: files.length, fraction: 0 })
       try {
         await mutation.mutateAsync(file)
       } catch (error) {
@@ -47,6 +61,7 @@ export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
         ])
       }
     }
+    setProgress(null)
     // Clear the picker so choosing the same file again still triggers a change.
     input.value = ''
   }
@@ -67,6 +82,35 @@ export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
           onChange={handleFiles}
         />
       </div>
+      {progress && (
+        <div className="mt-4 max-w-md">
+          <p className="flex justify-between gap-4 text-sm text-ink-muted">
+            <span className="truncate">
+              Uploading <span className="font-medium text-ink">{progress.filename}</span>
+              {progress.total > 1 && ` (${progress.number} of ${progress.total})`}
+            </span>
+            <span className="tabular-nums">{Math.round(progress.fraction * 100)}%</span>
+          </p>
+          <div
+            role="progressbar"
+            aria-label={`Uploading ${progress.filename}`}
+            aria-valuenow={Math.round(progress.fraction * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line"
+          >
+            {/* A key per file: the next file starts a fresh bar at 0
+                instead of the last one shrinking back. */}
+            <motion.div
+              key={progress.number}
+              className="h-full rounded-full bg-accent"
+              initial={false}
+              animate={{ width: `${progress.fraction * 100}%` }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+            />
+          </div>
+        </div>
+      )}
       {failures.length > 0 && (
         <div role="alert" className="mt-4 border-l-2 border-danger bg-danger-soft px-3 py-2">
           <p className="text-sm font-medium text-danger">

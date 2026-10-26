@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { motion } from 'motion/react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { FormEvent } from 'react'
@@ -198,14 +199,22 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
         )}
 
         {view?.kind === 'answer' && mutation.data && !mutation.isPending && (
-          <AnswerView
-            workspaceId={workspaceId}
-            answer={mutation.data.answer}
-            citations={mutation.data.citations}
-            unsupported={mutation.data.unsupported}
-            selected={selected}
-            onSelect={setSelected}
-          />
+          // A new answer rises in; a new question shows the loading line
+          // first, so each answer mounts (and animates) afresh.
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+          >
+            <AnswerView
+              workspaceId={workspaceId}
+              answer={mutation.data.answer}
+              citations={mutation.data.citations}
+              unsupported={mutation.data.unsupported}
+              selected={selected}
+              onSelect={setSelected}
+            />
+          </motion.div>
         )}
 
         {view?.kind === 'passages' && (
