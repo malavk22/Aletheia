@@ -110,14 +110,14 @@ def test_answer_without_real_citations_is_not_found(client, db, fake_llm, reply)
 
     result = answer_question(db, ada, "How long is the lease?")
 
-    assert result == {"answer": NOT_FOUND, "citations": []}
+    assert result == {"answer": NOT_FOUND, "citations": [], "unsupported": []}
 
 
 def test_empty_workspace_does_not_call_the_model(client, db, fake_llm):
     ada = workspace(db, workspace_for(client, "ada@example.com"))
     calls = fake_llm("should not be used [1]")
 
-    assert answer_question(db, ada, "rent?") == {"answer": NOT_FOUND, "citations": []}
+    assert answer_question(db, ada, "rent?") == {"answer": NOT_FOUND, "citations": [], "unsupported": []}
     assert calls == []
 
 
@@ -533,3 +533,59 @@ def test_ask_with_pages_but_no_document_is_422(client, db, fake_llm):
 
     assert response.status_code == 422
     assert calls == []
+
+
+# Sentences the sources don't back (V0.9): flagged, not removed.
+
+
+def test_a_sentence_without_a_citation_is_flagged(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    fake_llm("Notice is 30 days [1]. So you can leave next month.")
+
+    result = answer_question(db, ada, "terminate the lease with notice")
+
+    assert result["answer"] == "Notice is 30 days [1]. So you can leave next month."
+    assert result["unsupported"] == [
+        {"sentence": "So you can leave next month.", "reason": "no_source", "numbers": []}
+    ]
+
+
+def test_a_number_not_in_the_cited_passage_is_flagged(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    # The passage says 30 days; 1,000 rupees and 45 days are in no passage.
+    fake_llm("Notice is 30 days [1], or 45 days with a fee of 1,000 rupees [1].")
+
+    result = answer_question(db, ada, "terminate the lease with notice")
+
+    [flagged] = result["unsupported"]
+    assert flagged["reason"] == "number_not_in_source"
+    assert flagged["numbers"] == ["45", "1,000"]
+
+
+def test_a_fully_backed_answer_has_nothing_flagged(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    fake_llm("Either party may terminate the lease with 30 days notice [1].")
+
+    assert answer_question(db, ada, "terminate the lease with notice")["unsupported"] == []
+
+
+def test_a_number_from_another_passage_is_flagged(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    calls = fake_llm("unused")
+    answer_question(db, ada, "terminate the lease with notice")
+    # Whichever number the notice passage got, cite the other one.
+    notice = 1 if calls[0]["prompt"].index("30 days") < calls[0]["prompt"].index("rent monthly") else 2
+    fake_llm(f"Notice is 30 days [{3 - notice}].")
+
+    [flagged] = answer_question(db, ada, "terminate the lease with notice")["unsupported"]
+
+    assert flagged["numbers"] == ["30"]
+
+
+def test_ask_returns_the_flagged_sentences(client, db, fake_llm):
+    ada = lease_workspace(client, db)
+    fake_llm("Notice is 30 days [1]. So you can leave next month.")
+
+    body = ask(client, ada.id, "terminate the lease with notice").json()
+
+    assert body["unsupported"] == [{"sentence": "So you can leave next month.", "reason": "no_source", "numbers": []}]

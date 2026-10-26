@@ -1,3 +1,4 @@
+import logging
 import re
 import uuid
 
@@ -5,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.workspace import Workspace
 from app.documents import reranking
-from app.qa import llm
+from app.qa import llm, support
 from app.services.search import Parts, rare_word_search, semantic_search
 
 # How many passages the model reads per question: about 6 x 1,000 characters,
@@ -29,6 +30,8 @@ RERANK = 20
 # parts, since each one is another search and another reranking.
 PART_BREAK = re.compile(r",\s+(?:and\s+)?|\s+and\s+|\?\s+", re.IGNORECASE)
 MAX_PARTS = 4
+
+logger = logging.getLogger(__name__)
 
 NOT_FOUND = "The documents in this workspace don't answer this question."
 
@@ -55,11 +58,12 @@ def answer_question(
 ) -> dict:
     """An answer to `question` written only from this workspace's passages
     (only from `document_ids` and `parts`, when given), with the passages it
-    cites. Raises llm.LLMError if the model could not answer."""
+    cites and the sentences they don't back. Raises llm.LLMError if the model
+    could not answer."""
     passages = _find_passages(db, workspace, question, document_ids, parts)
     if not passages:
         # Nothing to read: no need to ask the model.
-        return {"answer": NOT_FOUND, "citations": []}
+        return {"answer": NOT_FOUND, "citations": [], "unsupported": []}
 
     reply = llm.generate(INSTRUCTIONS, _prompt(passages, question)).strip()
     if not reply:
@@ -69,9 +73,17 @@ def answer_question(
     if not cited:
         # An answer that points to no passage is not grounded in the
         # documents (this also covers the model's own NOT_FOUND reply).
-        return {"answer": NOT_FOUND, "citations": []}
+        return {"answer": NOT_FOUND, "citations": [], "unsupported": []}
     citations = [{"number": n, **passages[n - 1]} for n in sorted(cited)]
-    return {"answer": answer, "citations": citations}
+    # Each sentence checked against the passages it cites: flagged, not
+    # removed, so the person sees all of it and what isn't backed.
+    unsupported = support.unsupported_sentences(
+        answer, {number: passage["text"] for number, passage in enumerate(passages, start=1)}
+    )
+    if unsupported:
+        # Counted in the log, to see how often answers go beyond their sources.
+        logger.info("%d of the answer's sentences aren't backed by a source", len(unsupported))
+    return {"answer": answer, "citations": citations, "unsupported": unsupported}
 
 
 def _find_passages(

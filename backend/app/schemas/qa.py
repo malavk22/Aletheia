@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +22,17 @@ class Citation(SearchResult):
     number: int
 
 
+class UnsupportedSentence(BaseModel):
+    # A sentence of the answer, exactly as written in it.
+    sentence: str
+    # no_source: it cites nothing; number_not_in_source: it has numbers
+    # (listed, as written) that the passages it cites don't contain.
+    reason: Literal["no_source", "number_not_in_source"]
+    numbers: list[str]
+
+
 class AskResponse(BaseModel):
     answer: str
     citations: list[Citation]
+    # The answer's sentences its sources don't back (V0.9); empty if none.
+    unsupported: list[UnsupportedSentence]
