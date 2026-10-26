@@ -4,13 +4,13 @@ import type { Workspace } from '../api/workspaces.ts'
 import { Button } from './Button.tsx'
 import { ConfirmDeleteWorkspace } from './ConfirmDeleteWorkspace.tsx'
 
-// The "Delete workspace" section at the bottom of a workspace's own page.
+// The "Delete workspace" section, in the workspace's Settings tab.
 export function DeleteWorkspace({ workspace }: { workspace: Workspace }) {
   const navigate = useNavigate()
   const [confirming, setConfirming] = useState(false)
 
   return (
-    <section className="max-w-3xl border-t border-line pt-8">
+    <section>
       <h2 className="text-sm font-semibold">Delete workspace</h2>
       <p className="mt-1 text-sm text-ink-muted">
         Permanently deletes this workspace and every document in it. This cannot be undone.
