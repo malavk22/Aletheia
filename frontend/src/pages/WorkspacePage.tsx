@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
+import { documentsKey, listDocuments } from '../api/documents.ts'
 import { getWorkspace, workspaceKey } from '../api/workspaces.ts'
 import { AppHeader } from '../components/AppHeader.tsx'
 import { AskQuestion } from '../components/AskQuestion.tsx'
@@ -10,21 +11,14 @@ import { Button } from '../components/Button.tsx'
 import { CompareDocuments } from '../components/CompareDocuments.tsx'
 import { DeleteWorkspace } from '../components/DeleteWorkspace.tsx'
 import { DocumentList } from '../components/DocumentList.tsx'
+import { DropFiles } from '../components/DropFiles.tsx'
 import { FormError } from '../components/FormError.tsx'
 import { UploadDocuments } from '../components/UploadDocuments.tsx'
 import { WorkspaceActions } from '../components/WorkspaceActions.tsx'
-
-// The workspace's tabs, one job each. The open one is in the address
-// (?tab=documents), so Back, refresh and shared links keep it.
-const TABS = [
-  { id: 'ask', label: 'Ask' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'actions', label: 'Actions' },
-  { id: 'compare', label: 'Compare' },
-  { id: 'settings', label: 'Settings' },
-] as const
-
-type TabId = (typeof TABS)[number]['id']
+import { useUploads } from '../hooks/useUploads.ts'
+import { TABS } from '../workspaceTabs.ts'
+import type { TabId } from '../workspaceTabs.ts'
+import type { Uploads } from '../hooks/useUploads.ts'
 
 // One workspace: its name and tabs. The id comes from the address,
 // /workspaces/<id>.
@@ -33,6 +27,19 @@ export function WorkspacePage() {
   const [searchParams] = useSearchParams()
   // An unknown or missing tab opens Ask.
   const tab: TabId = TABS.find((t) => t.id === searchParams.get('tab'))?.id ?? 'ask'
+  const navigate = useNavigate()
+  const uploads = useUploads(workspaceId)
+  // Shared with the Documents tab's list (same key): asked for once.
+  const { data: documents } = useQuery({
+    queryKey: documentsKey(workspaceId),
+    queryFn: () => listDocuments(workspaceId),
+  })
+
+  // Dropped files go up at once; the Documents tab shows their progress.
+  function uploadDropped(files: File[]) {
+    navigate('?tab=documents')
+    uploads.upload(files)
+  }
   const {
     data: workspace,
     isPending,
@@ -52,7 +59,14 @@ export function WorkspacePage() {
           ← All workspaces
         </Link>
 
-        {isPending && <p className="mt-6 text-sm text-ink-muted">Loading workspace…</p>}
+        {isPending && (
+          <div aria-hidden="true" className="mt-6 animate-pulse">
+            <div className="h-8 w-64 rounded-sm bg-paper-deep" />
+            <div className="mt-3 h-3.5 w-80 max-w-full rounded-sm bg-paper-deep" />
+            <div className="mt-8 h-9 w-96 max-w-full rounded-sm bg-paper-deep" />
+          </div>
+        )}
+        {isPending && <p className="sr-only">Loading workspace…</p>}
 
         {notFound && (
           <div className="mt-6">
@@ -73,7 +87,7 @@ export function WorkspacePage() {
         )}
 
         {workspace && (
-          <>
+          <DropFiles target={workspace.name} onDrop={uploadDropped}>
             <h1 className="mt-4 font-serif text-3xl font-semibold tracking-tight">
               {workspace.name}
             </h1>
@@ -107,6 +121,7 @@ export function WorkspacePage() {
                 between tabs keeps a typed question, an answer or an upload. */}
             <div className="mt-10 max-w-3xl">
               <TabPanel open={tab === 'ask'}>
+                {documents?.length === 0 && <GettingStarted uploads={uploads} />}
                 <AskQuestion workspaceId={workspace.id} />
               </TabPanel>
               <TabPanel open={tab === 'documents'}>
@@ -120,7 +135,7 @@ export function WorkspacePage() {
                       documents is sent to Google.
                     </p>
                   </div>
-                  <UploadDocuments workspaceId={workspace.id} />
+                  <UploadDocuments uploads={uploads} />
                   <DocumentList workspaceId={workspace.id} />
                 </section>
               </TabPanel>
@@ -154,7 +169,7 @@ export function WorkspacePage() {
                 <DeleteWorkspace workspace={workspace} />
               </TabPanel>
             </div>
-          </>
+          </DropFiles>
         )}
       </main>
     </div>
@@ -172,5 +187,36 @@ function TabPanel({ open, children }: { open: boolean; children: ReactNode }) {
     >
       {children}
     </motion.div>
+  )
+}
+
+// On Ask while the workspace has no documents: what to do first, with the
+// Upload button right here.
+function GettingStarted({ uploads }: { uploads: Uploads }) {
+  const steps = [
+    ['Upload documents', 'PDF or Word files, or drop them anywhere on this page.'],
+    ['Ask a question', 'In your own words, as you would ask a colleague.'],
+    ['Check the sources', 'Every answer points to the page it came from.'],
+  ]
+  return (
+    <div className="mb-10 rounded-lg border border-line bg-surface p-6 shadow-xs">
+      <h2 className="font-serif text-xl font-semibold tracking-tight">Start here</h2>
+      <ol className="mt-4 space-y-3">
+        {steps.map(([title, detail], index) => (
+          <li key={title} className="flex gap-3">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-paper-deep text-xs font-semibold text-accent">
+              {index + 1}
+            </span>
+            <p className="text-sm">
+              <span className="font-medium">{title}</span>
+              <span className="text-ink-muted"> — {detail}</span>
+            </p>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-6">
+        <UploadDocuments uploads={uploads} />
+      </div>
+    </div>
   )
 }

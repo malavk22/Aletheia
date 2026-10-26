@@ -4,6 +4,7 @@ import type { FormEvent } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { deleteWorkspace, workspacesKey } from '../api/workspaces.ts'
 import type { Workspace } from '../api/workspaces.ts'
+import { useToast } from '../hooks/useToast.ts'
 import { Button } from './Button.tsx'
 import { FormError } from './FormError.tsx'
 import { TextField } from './TextField.tsx'
@@ -23,10 +24,12 @@ export function ConfirmDeleteWorkspace({
   onDeleted,
 }: ConfirmDeleteWorkspaceProps) {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [typedName, setTypedName] = useState('')
   const mutation = useMutation({
     mutationFn: () => deleteWorkspace(workspace.id),
     onSuccess: () => {
+      toast(`Deleted ${workspace.name}`)
       // exact: only the list. The deleted workspace's own data is left alone
       // so an open workspace page does not re-ask for it (and get a 404).
       queryClient.invalidateQueries({ queryKey: workspacesKey, exact: true })

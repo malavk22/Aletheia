@@ -7,6 +7,7 @@ import type { Workspace } from '../api/workspaces.ts'
 import { Button } from './Button.tsx'
 import { ConfirmDeleteWorkspace } from './ConfirmDeleteWorkspace.tsx'
 import { FormError } from './FormError.tsx'
+import { ListSkeleton } from './ListSkeleton.tsx'
 
 export function WorkspaceList() {
   const {
@@ -16,7 +17,7 @@ export function WorkspaceList() {
     refetch,
   } = useQuery({ queryKey: workspacesKey, queryFn: listWorkspaces })
 
-  if (isPending) return <p className="text-sm text-ink-muted">Loading workspaces…</p>
+  if (isPending) return <ListSkeleton label="Loading workspaces…" />
 
   return (
     <div className="space-y-4">

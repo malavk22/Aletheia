@@ -10,11 +10,13 @@ import {
 import type { WorkspaceDocument } from '../api/documents.ts'
 import { findActionsKey, workspaceActionsKey } from '../api/actions.ts'
 import { extractFactsKey } from '../api/facts.ts'
+import { useToast } from '../hooks/useToast.ts'
 import { Button } from './Button.tsx'
 import { DocumentActions } from './DocumentActions.tsx'
 import { DocumentDetails } from './DocumentDetails.tsx'
 import { KeyFacts } from './KeyFacts.tsx'
 import { FormError } from './FormError.tsx'
+import { ListSkeleton } from './ListSkeleton.tsx'
 
 export function DocumentList({ workspaceId }: { workspaceId: string }) {
   const {
@@ -31,7 +33,7 @@ export function DocumentList({ workspaceId }: { workspaceId: string }) {
       query.state.data?.some((document) => document.status === 'processing') ? 2000 : false,
   })
 
-  if (isPending) return <p className="text-sm text-ink-muted">Loading documents…</p>
+  if (isPending) return <ListSkeleton label="Loading documents…" />
 
   return (
     <div className="space-y-4">
@@ -68,6 +70,7 @@ function DocumentRow({
   document: WorkspaceDocument
 }) {
   const queryClient = useQueryClient()
+  const toast = useToast()
   // Deleting takes two clicks: "Delete", then "Confirm delete".
   const [confirming, setConfirming] = useState(false)
   // The panel opened below the row: one at a time keeps the list short.
@@ -78,6 +81,7 @@ function DocumentRow({
   const mutation = useMutation({
     mutationFn: () => deleteDocument(workspaceId, document.id),
     onSuccess: () => {
+      toast(`Deleted ${document.filename}`)
       // A deleted document's actions are deleted with it.
       queryClient.invalidateQueries({ queryKey: workspaceActionsKey(workspaceId) })
       return queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) })
@@ -163,16 +167,12 @@ function DocumentRow({
         <KeyFacts
           workspaceId={workspaceId}
           documentId={document.id}
-          // First open of a never-extracted document: one click extracts.
-          extractOnOpen={document.facts_extracted_at === null}
         />
       )}
       {panel === 'actions' && document.status === 'ready' && (
         <DocumentActions
           workspaceId={workspaceId}
           documentId={document.id}
-          // First open of a never-searched document: one click searches.
-          findOnOpen={document.actions_extracted_at === null}
         />
       )}
     </li>

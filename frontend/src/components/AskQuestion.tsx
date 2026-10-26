@@ -9,6 +9,7 @@ import type { DocumentPart, WorkspaceDocument } from '../api/documents.ts'
 import { askQuestion } from '../api/qa.ts'
 import type { Citation, UnsupportedSentence } from '../api/qa.ts'
 import type { PartRange } from '../api/search.ts'
+import { useToast } from '../hooks/useToast.ts'
 import { Button } from './Button.tsx'
 import { FormError } from './FormError.tsx'
 import { PassageResults, Tag } from './PassageResults.tsx'
@@ -43,6 +44,16 @@ function groupByPlace(answer: string, citations: Citation[]) {
   }
   return { sources, labelOf }
 }
+
+// Offered under an empty box: questions most contracts, reports and policies
+// can answer. Fixed, not generated: suggesting from the documents would cost
+// an AI call before anyone asked anything.
+const SUGGESTIONS = [
+  'What are the key dates and deadlines?',
+  'Who are the people and organizations involved?',
+  'What amounts, fees or prices are mentioned?',
+  'What has to be done, and by whom?',
+]
 
 // What the box last asked for: a written answer, or the matching passages.
 type View = { kind: 'answer' } | { kind: 'passages'; query: string } | null
@@ -84,6 +95,10 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
     event.preventDefault()
     const text = question.trim()
     if (text === '') return
+    askAbout(text)
+  }
+
+  function askAbout(text: string) {
     setSelected(null)
     setView({ kind: 'answer' })
     mutation.mutate(text)
@@ -177,6 +192,27 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
         Ask writes an answer from your documents, with its sources. Find passages lists where
         they mention it.
       </p>
+      {question === '' && view === null && ready.length > 0 && (
+        <div className="mt-5">
+          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">Try asking</p>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {SUGGESTIONS.map((suggestion) => (
+              <li key={suggestion}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuestion(suggestion)
+                    askAbout(suggestion)
+                  }}
+                  className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm text-ink-muted shadow-xs transition-colors hover:border-line-strong hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+                >
+                  {suggestion}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* aria-live: screen readers announce the answer when it arrives. */}
       <div aria-live="polite">
@@ -367,6 +403,8 @@ function AnswerView({
   selected: number | null
   onSelect: (label: number) => void
 }) {
+  const toast = useToast()
+
   // No citations: the documents don't answer it (the backend never returns
   // an answer without evidence).
   if (citations.length === 0) {
@@ -382,6 +420,16 @@ function AnswerView({
 
   const { sources, labelOf } = groupByPlace(answer, citations)
 
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(answerAsText(answer, sources, labelOf))
+      toast('Answer copied, with its sources')
+    } catch {
+      // The clipboard needs https (or localhost) and the page in focus.
+      toast("Couldn't copy. Select the text and copy it instead.")
+    }
+  }
+
   function select(label: number) {
     onSelect(label)
     document.getElementById(`source-${label}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
@@ -389,6 +437,11 @@ function AnswerView({
 
   return (
     <div className="mt-6 rounded-sm border border-line bg-surface p-5">
+      <div className="float-right ml-4">
+        <Button variant="ghost" className="-mt-2 -mr-2 h-8 px-2.5" onClick={copy}>
+          Copy
+        </Button>
+      </div>
       <p className="leading-relaxed">
         <WithChips text={answer} labelOf={labelOf} selected={selected} onSelect={select} />
       </p>
@@ -412,6 +465,29 @@ function AnswerView({
       </ol>
     </div>
   )
+}
+
+// Where a citation is: "p. 3" in a PDF, the heading above it in a Word file.
+function placeOf(citation: Citation) {
+  return citation.page_number !== null
+    ? `p. ${citation.page_number}`
+    : (citation.heading ?? 'Before the first heading')
+}
+
+// The answer as plain text for the clipboard: its [n] markers as the labels
+// shown on screen ([2][3] from one page become one [1]), then the sources.
+function answerAsText(answer: string, sources: Source[], labelOf: Map<number, number>) {
+  const text = answer
+    .replace(/\[(\d+)\]/g, (marker, number) => {
+      const label = labelOf.get(Number(number))
+      return label === undefined ? marker : `[${label}]`
+    })
+    .replace(/(\[\d+\])\1+/g, '$1')
+  const list = sources.map((source) => {
+    const first = source.citations[0]
+    return `[${source.label}] ${first.filename}, ${placeOf(first)}`
+  })
+  return `${text}\n\nSources:\n${list.join('\n')}`
 }
 
 // The answer's sentences the sources don't back: shown, not hidden, so the
@@ -489,8 +565,7 @@ function SourceItem({
   selected: boolean
 }) {
   const first = source.citations[0]
-  const where =
-    first.page_number !== null ? `p. ${first.page_number}` : (first.heading ?? 'Before the first heading')
+  const where = placeOf(first)
 
   return (
     <li

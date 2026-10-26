@@ -4,8 +4,10 @@ import { logout } from '../api/auth.ts'
 import { UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { clearSession, useCurrentUser } from '../hooks/useCurrentUser.ts'
 import { Button } from './Button.tsx'
+import { QuickSearch } from './QuickSearch.tsx'
 
-// The header on every signed-in page: wordmark, the person's email, Log out.
+// The header on every signed-in page: wordmark, Quick search, the person's
+// email, Log out.
 export function AppHeader() {
   const { data: user } = useCurrentUser()
   const queryClient = useQueryClient()
@@ -21,6 +23,7 @@ export function AppHeader() {
         Aletheia
       </Link>
       <div className="flex items-center gap-4">
+        <QuickSearch />
         {mutation.isError && <span className="text-sm text-danger">{UNREACHABLE_MESSAGE}</span>}
         <span className="hidden text-sm text-ink-muted sm:inline">{user?.email}</span>
         <Button variant="ghost" loading={mutation.isPending} onClick={() => mutation.mutate()}>

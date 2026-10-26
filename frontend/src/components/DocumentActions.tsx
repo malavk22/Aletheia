@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   documentActionsKey,
@@ -33,16 +33,14 @@ const smallButton =
   'rounded-sm px-2 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-accent'
 
 // A document's deadlines and tasks, found by the AI. They are suggestions
-// until a person confirms them; only confirmed ones count. With
-// `findOnOpen`, a document never searched is searched when the panel opens.
+// until a person confirms them; only confirmed ones count. Finding calls
+// Gemini, so it starts only when the person presses the button.
 export function DocumentActions({
   workspaceId,
   documentId,
-  findOnOpen,
 }: {
   workspaceId: string
   documentId: string
-  findOnOpen: boolean
 }) {
   const queryClient = useQueryClient()
   const key = documentActionsKey(workspaceId, documentId)
@@ -60,16 +58,6 @@ export function DocumentActions({
       return queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) })
     },
   })
-
-  // Start only once, even if React runs this effect twice (development mode).
-  const started = useRef(false)
-  const { mutate } = finding
-  useEffect(() => {
-    if (findOnOpen && data?.extracted_at === null && !started.current) {
-      started.current = true
-      mutate()
-    }
-  }, [findOnOpen, data, mutate])
 
   if (isPending) return <FactsSkeleton />
   if (error || !data) return <FormError>{UNREACHABLE_MESSAGE}</FormError>

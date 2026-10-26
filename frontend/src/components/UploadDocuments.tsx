@@ -1,67 +1,19 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import type { ChangeEvent } from 'react'
-import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
-import { documentsKey, uploadDocument } from '../api/documents.ts'
+import type { Uploads } from '../hooks/useUploads.ts'
 import { Button } from './Button.tsx'
 
-// The file being sent now, and how much of it (0 to 1).
-type Progress = {
-  filename: string
-  number: number
-  total: number
-  fraction: number
-}
-
-type FailedUpload = {
-  filename: string
-  error: string
-}
-
-// Our own API's messages for these are written for people, so show them as-is.
-function uploadErrorMessage(error: unknown) {
-  if (error instanceof ApiError && (error.status === 413 || error.status === 415)) {
-    return error.message
-  }
-  return UNREACHABLE_MESSAGE
-}
-
-export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
-  const queryClient = useQueryClient()
+// The Upload button, the progress of the file being sent, and the files that
+// failed. The uploading itself is in useUploads, shared with dropping files on
+// the workspace page.
+export function UploadDocuments({ uploads }: { uploads: Uploads }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  // Only failures are listed here. A successful upload shows up in the
-  // document list itself, so a separate "uploaded" line would only go stale
-  // (for example after that document is deleted).
-  const [failures, setFailures] = useState<FailedUpload[]>([])
-  const [progress, setProgress] = useState<Progress | null>(null)
-  const mutation = useMutation({
-    mutationFn: (file: File) =>
-      uploadDocument(workspaceId, file, (fraction) =>
-        setProgress((current) => current && { ...current, fraction }),
-      ),
-    // Refresh the list after each file, so documents appear as they finish.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: documentsKey(workspaceId) }),
-  })
+  const { progress, failures } = uploads
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget
-    const files = Array.from(input.files ?? [])
-    setFailures([])
-
-    // One request per file, one after another, so each gets its own result.
-    for (const [index, file] of files.entries()) {
-      setProgress({ filename: file.name, number: index + 1, total: files.length, fraction: 0 })
-      try {
-        await mutation.mutateAsync(file)
-      } catch (error) {
-        setFailures((previous) => [
-          ...previous,
-          { filename: file.name, error: uploadErrorMessage(error) },
-        ])
-      }
-    }
-    setProgress(null)
+    await uploads.upload(Array.from(input.files ?? []))
     // Clear the picker so choosing the same file again still triggers a change.
     input.value = ''
   }
@@ -69,7 +21,7 @@ export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-4">
-        <Button loading={mutation.isPending} onClick={() => inputRef.current?.click()}>
+        <Button loading={progress !== null} onClick={() => inputRef.current?.click()}>
           Upload files
         </Button>
         <p className="text-sm text-ink-muted">PDF or DOCX, up to 20 MB each.</p>
@@ -125,7 +77,7 @@ export function UploadDocuments({ workspaceId }: { workspaceId: string }) {
           </ul>
           <button
             type="button"
-            onClick={() => setFailures([])}
+            onClick={uploads.dismissFailures}
             className="mt-2 rounded-sm text-sm font-medium text-danger underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-accent"
           >
             Dismiss

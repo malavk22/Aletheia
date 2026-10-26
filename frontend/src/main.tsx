@@ -16,6 +16,7 @@ import '@fontsource-variable/source-serif-4'
 import '@fontsource-variable/newsreader/opsz.css'
 import './index.css'
 import { ApiError } from './api/client.ts'
+import { ToastProvider } from './components/Toasts.tsx'
 import { clearSession } from './hooks/useCurrentUser.ts'
 import { router } from './routes.tsx'
 
@@ -38,7 +39,9 @@ createRoot(document.getElementById('root')!).render(
       {/* "user": people who ask their system for reduced motion get no
           movement, only fades. */}
       <MotionConfig reducedMotion="user">
-        <RouterProvider router={router} />
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
       </MotionConfig>
     </QueryClientProvider>
   </StrictMode>,

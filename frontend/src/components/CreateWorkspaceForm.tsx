@@ -3,16 +3,21 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { createWorkspace, workspacesKey } from '../api/workspaces.ts'
+import { useToast } from '../hooks/useToast.ts'
 import { Button } from './Button.tsx'
 import { TextField } from './TextField.tsx'
 
 export function CreateWorkspaceForm() {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [nameError, setNameError] = useState<string>()
   const mutation = useMutation({
     mutationFn: createWorkspace,
     // The list on screen is now out of date, so ask the server for it again.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: workspacesKey }),
+    onSuccess: (workspace) => {
+      toast(`Created ${workspace.name}`)
+      return queryClient.invalidateQueries({ queryKey: workspacesKey })
+    },
   })
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

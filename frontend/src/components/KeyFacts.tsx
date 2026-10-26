@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { documentFileUrl, documentsKey } from '../api/documents.ts'
 import { extractFacts, extractFactsKey, factsKey, getFacts } from '../api/facts.ts'
@@ -70,17 +70,9 @@ function merged(facts: Fact[]) {
 
 // A document's key facts: people, organizations, dates, amounts and
 // requirements, each with the sentence it comes from. Shown under a document
-// in the list once it is processed. With `extractOnOpen`, a document that was
-// never extracted is extracted as soon as the panel opens.
-export function KeyFacts({
-  workspaceId,
-  documentId,
-  extractOnOpen,
-}: {
-  workspaceId: string
-  documentId: string
-  extractOnOpen: boolean
-}) {
+// in the list once it is processed. Extracting calls Gemini, so it starts only
+// when the person presses the button, never just by opening the panel.
+export function KeyFacts({ workspaceId, documentId }: { workspaceId: string; documentId: string }) {
   const queryClient = useQueryClient()
   const key = factsKey(workspaceId, documentId)
   const { data, isPending, error } = useQuery({
@@ -100,16 +92,6 @@ export function KeyFacts({
   })
   // The group shown; one at a time keeps a long document's panel short.
   const [chosenKind, setChosenKind] = useState<FactKind | null>(null)
-
-  // Start only once, even if React runs this effect twice (development mode).
-  const started = useRef(false)
-  const { mutate } = extraction
-  useEffect(() => {
-    if (extractOnOpen && data?.extracted_at === null && !started.current) {
-      started.current = true
-      mutate()
-    }
-  }, [extractOnOpen, data, mutate])
 
   if (isPending) return <FactsSkeleton />
   if (error || !data) return <FormError>{UNREACHABLE_MESSAGE}</FormError>
