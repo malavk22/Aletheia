@@ -1,106 +1,130 @@
 # Aletheia
 
-A document intelligence workspace: upload documents, make them searchable, and
-get answers backed by evidence from the source — not just AI-generated text.
+**Ask your documents questions and get answers you can check.**
 
-## Status
+Aletheia is a document intelligence workspace. Upload PDF and Word files, then
+search them, ask questions, extract key facts and deadlines, and compare
+versions. Every answer points to the exact page it came from, and anything the
+sources don't back is marked as such, so you never have to take the AI's word
+for it.
 
-**V0.1 — Foundation (done).** Accounts, sign in and workspaces, in the backend
-and the frontend.
+## Features
 
-**V0.2 — Processing (done).** Upload PDF and DOCX files into a workspace; their
-text is extracted page by page (PDF) or section by section (Word) in the
-background, with OCR for scanned pages.
+**Ask questions, with sources**
+- Answers are written by an LLM only from your documents, with numbered
+  citations that show the passage and open the page.
+- Citations are verified by the backend: a reference to a passage that wasn't
+  given to the model is removed, and an answer without a real source becomes
+  "the documents don't answer this question".
+- Each sentence is checked against the passages it cites. A sentence with no
+  citation, or with a number its sources don't contain (such as a
+  calculation), is listed under the answer as **Not found in the sources**.
+- Questions with several parts, and questions comparing documents ("who must
+  give longer notice, an employee or a contractor?"), are answered from every
+  document involved.
+- **Search in** limits a question to chosen documents, or to a range of pages or
+  sections of one document.
 
-**V0.3 — Search (done).** Documents are cut into chunks (page headers and
-footers left out) and embedded with a local model. Search a workspace by
-meaning (pgvector) or by exact words (PostgreSQL full-text search); every result
-shows its page or section, and PDF results open at that page.
+**Search**
+- **Find passages** by meaning or by exact words, without AI. Every result shows
+  its page or section, and PDF results open at that page.
 
-**V0.4 — Grounded Q&A (done).** One question box per workspace. **Ask** writes
-a short answer from the workspace's most relevant passages (Gemini), and every
-claim carries a numbered source that shows the passage and opens its page.
-Citations are checked by the backend: a source that wasn't among the passages
-is removed, and an answer without any real source is replaced by "the documents
-don't answer this". **Find passages** lists the matching passages, without AI.
+**Extract**
+- **Key facts:** people, organizations, dates, amounts and requirements, each
+  with the document's own sentence and page. A fact is kept only if that
+  sentence really is on that page.
+- **Actions:** deadlines and tasks found in a document. Exact dates and relative
+  deadlines ("within 30 days of signing") are kept apart; a date is never
+  guessed. Actions are suggestions until a person confirms them, then appear in
+  the workspace's **Upcoming** list and **Timeline**.
 
-**V0.5 — Structured intelligence (done).** **Key facts** on every processed
-document: the people, organizations, dates, amounts and requirements in it,
-pulled out by Gemini as structured data. Every fact carries the document's own
-sentence and its page; the backend keeps a fact only if that sentence really is
-on that page, and dates are checked to be real. Facts are shown by group, with
-repeats shown once. (Tables and custom fields come later.)
+**Compare**
+- **Compare versions:** what changed between two documents, sentence by
+  sentence (changed words marked, formatting-only changes kept apart), without AI.
+- **Check for conflicts:** passages on the same topic in two documents, and the
+  ones that contradict each other, with both sentences and pages.
 
-**V0.6 — Comparison (done).** **Compare versions** takes two documents of a
-workspace and lists what changed, sentence by sentence and without AI: changed
-(with the changed words marked), removed and added, each with its page in both
-versions; formatting-only changes (spacing, capitals, punctuation) are kept
-apart. **Check for conflicts** pairs the passages of the two documents that are
-closest in meaning and asks Gemini which ones contradict each other; each
-**potential conflict** shows both documents' own sentences and pages, and is kept
-only if both sentences really are in their documents.
+**Documents and workspaces**
+- PDF and DOCX upload, processed in the background; scanned pages are read
+  with OCR.
+- Accounts and workspaces. Every query is scoped to the workspace in the
+  database itself: documents of other workspaces can't be searched, cited or
+  opened, and asking for one returns "not found".
 
-**V0.7 — Action layer (done).** **Actions** on every processed document: the
-deadlines and tasks it asks of someone, found by Gemini, each with the
-document's own sentence and page (kept only if that sentence really is on that
-page). Exact dates ("by 15 March 2026") and relative deadlines ("within 30 days
-of signing") are kept apart, and a date is never worked out or guessed: a
-relative deadline gets a date only from a person, marked as theirs. Confidence
-comes from rules on the evidence. Every action is a suggestion until a person
-confirms it; confirmed actions of the whole workspace are listed as
-**Upcoming** (overdue and the next 14 days), **Timeline** (by month) and **No
-fixed date**. A finished action is marked **done**: it leaves Upcoming and stays
-in the Timeline. Reminders are shown in the app only (no email or phone).
+## How it works
 
-**V0.8 — Advanced RAG (done).** Ask finds its passages in several steps,
-each kept only because it scored better on a fixed set of 42 test questions
-(`backend/tests/retrieval_set.py`): search by rare words and by meaning,
-combined by reciprocal rank fusion; the 20 best re-ordered by a **local
-reranker** (a cross-encoder that reads the question and each passage
-together); a question with several parts also searched part by part, so every
-part gets a place. Share of answer pages among the 6 passages Ask reads:
-0.881 → 1.0; the first passage is on an answer page 52% → 90% of the time.
-**Search in** limits Ask and Find passages to chosen documents, and within one
-document to a range of pages or sections. Questions comparing two documents
-("who must give longer notice, an employee or a contractor?") are answered
-from both, with a source from each. When Gemini's usage limit is reached, the
-page says so and when to try again.
+```
+Upload ─► extract text (OCR for scanned pages) ─► split into chunks ─► embed locally
+                                                                          │
+Question ─► keyword search ─┐                                             ▼
+          ─► meaning search ─┴► rank fusion ─► local reranker ─► best 6 passages
+                                                                          │
+                                       Gemini writes the answer from them ◄┘
+                                                                          │
+                     citations verified, each sentence checked ─► answer + sources
+```
 
-**V0.9 — AI evaluation (done).** Answers are scored, not only the passages.
-Gemini's answers to 36 test questions are recorded once
-(`backend/tests/record_answers.py`, run on purpose: it calls Gemini) and scored
-offline with rules on every test run: correct facts, cited answer pages, facts
-backed by the cited passage, sentences with a citation, numbers not in the
-sources, and "not found" for questions the documents don't answer. Baseline:
-30 of 30 answers correct, 6 of 6 unanswerable questions declined, 1 sentence
-in 30 answers without a citation. A test fails if a new recording or a rule
-change scores lower. In the app, every answer's sentences are checked against
-the passages they cite: a sentence with no citation, or with a number its
-sources don't contain (such as a calculation), is listed under the answer as
-**Not found in the sources**, not removed.
+- **Hybrid retrieval:** keyword search (PostgreSQL full-text search on the
+  question's rare words) and meaning search (embeddings in pgvector) each rank
+  the passages; reciprocal rank fusion combines the two rankings.
+- **Reranking:** a cross-encoder reads the question with each of the 20 best
+  passages and puts them in order; the best 6 go to the model.
+- **Local where possible:** embeddings, reranking and OCR run on your machine.
+  Only answering, fact and action extraction, and conflict checks call Gemini.
 
-**Next — V1.0: production candidate.** Security hardening, performance,
-monitoring, deployment and documentation.
+## Measured quality
+
+Changes to retrieval and answering are measured on a fixed test set of
+made-up documents (leases, policies, manuals, meeting notes), and kept only if
+the score improves. Tests fail if a later change scores lower.
+
+**Retrieval** (42 questions; is the answer page among the 6 passages the model reads?)
+
+| | Answer page found | Answer page ranked first |
+|---|---|---|
+| Keyword then meaning search | 88% | 52% |
+| + rank fusion and tokenizer fix | 94% | 69% |
+| + local reranker | **100%** | **90%** |
+
+**Answers** (36 questions answered by Gemini, scored by rules)
+
+| | Result |
+|---|---|
+| Answers stating every expected fact | 30 of 30 |
+| Facts backed by the passage the answer cites | 100% |
+| Unanswerable questions declined | 6 of 6 |
+| Median answer time | 2.9 s |
+
+The test set is small and made up; it shows that each change helped, not that
+answers are perfect on every real document.
 
 ## Tech stack
 
 - **Backend:** Python, FastAPI, SQLAlchemy, Alembic, Pydantic
-- **Database:** PostgreSQL + pgvector (vector search), full-text search
-- **AI:** local embedding model (`BAAI/bge-small-en-v1.5` via fastembed), local reranker
-  (`Xenova/ms-marco-MiniLM-L-6-v2`, a cross-encoder, via fastembed), Tesseract OCR,
-  Google Gemini for answers, key facts, conflict checks and actions (`google-genai`)
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS
+- **Database:** PostgreSQL with pgvector and full-text search
+- **AI:** `BAAI/bge-small-en-v1.5` embeddings and `ms-marco-MiniLM-L-6-v2`
+  reranker (local, via fastembed), Tesseract OCR, Google Gemini (`google-genai`)
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, TanStack Query
 
-## Run the backend locally
+## Getting started
 
-Requirements: Python 3.11+, PostgreSQL with the
-[pgvector](https://github.com/pgvector/pgvector) extension, and Tesseract for
-reading scanned PDFs (OCR). On Windows: `winget install --id UB-Mannheim.TesseractOCR`.
-Without Tesseract everything else works; scanned PDFs are marked as failed.
+### Prerequisites
 
-pgvector has no Windows installer; build it once from an administrator
-"x64 Native Tools Command Prompt for VS" (needs Visual Studio's
-"Desktop development with C++"):
+- Python 3.11+
+- PostgreSQL with the [pgvector](https://github.com/pgvector/pgvector) extension
+- Node.js 22+
+- Optional: [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) for
+  scanned PDFs (on Windows: `winget install --id UB-Mannheim.TesseractOCR`).
+  Without it, everything else works and scanned PDFs are marked as failed.
+- Optional: a free [Gemini API key](https://aistudio.google.com) for questions,
+  key facts, actions and conflict checks.
+
+<details>
+<summary>Installing pgvector on Windows</summary>
+
+pgvector has no Windows installer. Build it once from an administrator
+"x64 Native Tools Command Prompt for VS" (needs Visual Studio's "Desktop
+development with C++"):
 
 ```bat
 set "PGROOT=C:\Program Files\PostgreSQL\17"
@@ -109,52 +133,32 @@ cd pgvector
 nmake /F Makefile.win
 nmake /F Makefile.win install
 ```
+</details>
+
+### Backend
 
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate          # Windows (macOS/Linux: source .venv/bin/activate)
+.venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create a database named `aletheia`, then copy `.env.example` to `.env` and set
-your database password. (If the password contains `@`, write it as `%40`.)
+Create a PostgreSQL database named `aletheia`, copy `.env.example` to `.env`
+and set your database password (write `@` in it as `%40`). Then:
 
 ```bash
-alembic upgrade head            # create the database tables
-python -m app.backfill          # once, after upgrading to V0.3: chunk and embed older documents
+alembic upgrade head            # create the tables
 uvicorn app.main:app --reload   # http://localhost:8000/api/v1/health
-pytest                          # run tests
 ```
 
-The first document processed downloads the embedding model
-(`BAAI/bge-small-en-v1.5`, about 67 MB) into `backend/models/`. It runs on
-the CPU; uploading, reading and searching documents never uses an outside service.
-The first question asked downloads the reranker (`Xenova/ms-marco-MiniLM-L-6-v2`,
-about 80 MB) into the same folder; it also runs on the CPU, and adds 1–3 s to
-an answer (more for a question with several parts).
+The embedding model (about 67 MB) and the reranker (about 80 MB) are
+downloaded into `backend/models/` the first time they're needed, and run on
+the CPU.
 
-Answers to questions are written by Google Gemini. Get a free API key at
-[aistudio.google.com](https://aistudio.google.com) and add `GEMINI_API_KEY=...`
-to `backend/.env`. Only the question and the few passages chosen to answer it
-are sent; on Gemini's free tier Google may use them to improve its products, so
-use the free tier with test documents only. Key facts also use Gemini and send
-the whole document's text, only when you click "Key facts" on a document not
-extracted before, or "Extract again" (a 50-page report takes about a minute).
-Check for conflicts sends up to 8 pairs of matched passages (about 12,000
-characters), only when you click it; comparing versions never uses Gemini.
-Actions send the whole document's text, like Key facts, only when you click
-"Actions" on a document not searched before, or "Find again"; the workspace's
-Upcoming and Timeline lists never call Gemini.
-Without a key everything else works; Ask, Key facts, Check for conflicts and
-Actions show "Couldn't … right now". `LLM_MODEL` and `LLM_FALLBACK_MODEL` choose the models (see `.env.example`).
+### Frontend
 
-Tests run in their own database, `aletheia_test`, which is created
-automatically on the first run. They never touch the `aletheia` database.
-
-## Run the frontend locally
-
-Requirements: Node.js 22+. Start the backend first.
+With the backend running:
 
 ```bash
 cd frontend
@@ -162,4 +166,73 @@ npm install
 npm run dev                     # http://localhost:5173
 ```
 
-Calls to `/api` are forwarded to the backend on port 8000 (see `vite.config.ts`).
+Calls to `/api` are forwarded to the backend on port 8000.
+
+## Configuration
+
+Settings are read from `backend/.env` (see `.env.example`).
+
+| Setting | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection (required) |
+| `GEMINI_API_KEY` | Enables questions, key facts, actions and conflict checks |
+| `LLM_MODEL`, `LLM_FALLBACK_MODEL` | The Gemini model, and the one tried when it's busy or over its limit |
+| `COOKIE_SECURE` | Set to `true` when served over HTTPS |
+
+When a usage limit is reached, the app says so and when to try again; search,
+comparison and everything else keep working without a key.
+
+## Privacy
+
+Uploading, reading, searching and comparing documents never use an outside
+service. Gemini receives:
+
+- **Ask:** the question and the 6 passages chosen to answer it.
+- **Key facts and Actions:** the whole document's text, only when you click them.
+- **Check for conflicts:** up to 8 pairs of matched passages, only when you click it.
+
+On Gemini's free tier, Google may use this data to improve its products: use
+it with test documents only.
+
+## Testing
+
+```bash
+cd backend
+pytest                          # the full suite, in its own database (aletheia_test)
+pytest tests/test_retrieval.py -s   # retrieval scores
+pytest tests/test_answers.py -s     # answer scores
+```
+
+```bash
+cd frontend
+npm run lint
+npm run build                   # type-checks, then builds
+```
+
+Tests never call Gemini. Answer quality is scored on answers recorded once
+with `pytest tests/record_answers.py -s`, which does call Gemini and is run
+only on purpose, for example after changing the prompt.
+
+## Project structure
+
+```
+backend/
+  app/
+    api/         HTTP routes and access checks
+    documents/   text extraction, OCR, chunking, embeddings, reranking
+    qa/          Gemini client and answer checks
+    services/    search, question answering, facts, actions, comparison
+    models/      database tables
+  alembic/       database migrations
+  tests/         tests, test documents and the evaluation sets
+frontend/
+  src/
+    api/         calls to the backend
+    components/  the workspace page and its features
+```
+
+## Roadmap
+
+- Rate limiting per user, and other security hardening
+- Deployment and monitoring
+- Evaluation of key facts, actions and conflict checks
