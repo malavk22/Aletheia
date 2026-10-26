@@ -1,5 +1,7 @@
 import pytest
-from answer_scoring import contains, numbers, score_answer, sentences, states, unsupported_numbers
+from answer_scoring import contains, score_answer, states
+
+from app.qa.support import numbers, sentences, unsupported_numbers
 
 NOT_FOUND = "The documents in this workspace don't answer this question."
 
@@ -73,6 +75,13 @@ def test_sentences_split_at_full_stops_but_not_inside_addresses():
 
 def test_numbers_ignore_markers_and_thousands_commas():
     assert numbers("A fee of 18,400 rupees [2], or 1,533.33 a month [1].") == {"18400", "1533.33"}
+
+
+def test_the_digits_of_a_product_code_are_not_numbers():
+    assert numbers("The AX-500 and the AX300 [1].") == set()
+    # Quantities still count, also when a unit follows.
+    assert numbers("A 12V adapter with a 3-year warranty.") == {"12", "3"}
+    assert numbers("Between 60-90 days.") == {"60", "90"}
 
 
 def test_a_calculated_number_is_unsupported():

@@ -17,6 +17,8 @@ For each answer:
 import re
 import statistics
 
+from app.qa.support import MARKER, sentences, unsupported_numbers
+
 MONTHS = (
     "january february march april may june july august september october november december"
 ).split()
@@ -24,13 +26,6 @@ _MONTH = "|".join(MONTHS)
 # "20 March", "20 March 2026", "March 20", "March 20, 2026".
 _DAY_MONTH = re.compile(rf"\b(\d{{1,2}}) ({_MONTH})(?:,? (\d{{4}}))?\b")
 _MONTH_DAY = re.compile(rf"\b({_MONTH}) (\d{{1,2}})(?:,? (\d{{4}}))?\b")
-
-# "[1]" markers; numbers such as 500, 18,400, 1.5, 192.168.8.1.
-MARKER = re.compile(r"\[(\d+)\]")
-NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
-# A sentence ends at . ! or ? followed by a space ("192.168.8.1" has none).
-SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
-
 
 def normalize(text: str) -> str:
     """Lower case, single spaces, straight quotes, and every date written
@@ -54,24 +49,6 @@ def contains(text: str, phrase: str) -> bool:
 def states(text: str, fact: tuple[str, ...]) -> bool:
     """The text states the fact in one of its ways of writing it."""
     return any(contains(text, way) for way in fact)
-
-
-def sentences(answer: str) -> list[str]:
-    return [sentence for sentence in SENTENCE_END.split(answer.strip()) if sentence]
-
-
-def numbers(text: str) -> set[str]:
-    """The numbers in a text, without the [n] markers, thousands commas
-    removed so "18,400" and "18400" are the same number."""
-    return {number.replace(",", "") for number in NUMBER.findall(MARKER.sub("", text))}
-
-
-def unsupported_numbers(sentence: str, passages: dict[int, str]) -> set[str]:
-    """Numbers in the sentence that aren't in any passage it cites. With no
-    citation, every number is unsupported: nothing backs it."""
-    cited = [passages[int(n)] for n in MARKER.findall(sentence) if int(n) in passages]
-    found = set().union(*(numbers(text) for text in cited))
-    return numbers(sentence) - found
 
 
 def score_answer(record: dict, facts: list, pages: list, not_found: str) -> dict:
