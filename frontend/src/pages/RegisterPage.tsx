@@ -53,7 +53,14 @@ export function RegisterPage() {
   return (
     <AuthLayout title="Create your account" intro="You only need an email and a password.">
       <form className="space-y-5" onSubmit={handleSubmit}>
-        {mutation.isError && !emailError && <FormError>{UNREACHABLE_MESSAGE}</FormError>}
+        {mutation.isError && !emailError && (
+          <FormError>
+            {/* 429: too many new accounts (or sign-ins) from this address. */}
+            {mutation.error instanceof ApiError && mutation.error.status === 429
+              ? mutation.error.message
+              : UNREACHABLE_MESSAGE}
+          </FormError>
+        )}
         <TextField
           label="Email"
           name="email"

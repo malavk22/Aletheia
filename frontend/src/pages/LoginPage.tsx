@@ -28,15 +28,21 @@ export function LoginPage() {
     })
   }
 
-  const isWrongCredentials = mutation.error instanceof ApiError && mutation.error.status === 401
+  const error = mutation.error
+  // 401: wrong details. 429: too many failed attempts; the message says when
+  // to try again. Anything else: the server could not be reached.
+  const errorMessage =
+    error instanceof ApiError && error.status === 401
+      ? 'Invalid email or password.'
+      : error instanceof ApiError && error.status === 429
+        ? error.message
+        : UNREACHABLE_MESSAGE
 
   return (
     <AuthLayout title="Sign in" intro="Use the email you registered with.">
       <form className="space-y-5" onSubmit={handleSubmit}>
         {mutation.isError && (
-          <FormError>
-            {isWrongCredentials ? 'Invalid email or password.' : UNREACHABLE_MESSAGE}
-          </FormError>
+          <FormError>{errorMessage}</FormError>
         )}
         <TextField label="Email" name="email" type="email" autoComplete="email" required />
         <PasswordField label="Password" name="password" autoComplete="current-password" required />
