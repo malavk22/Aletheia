@@ -6,7 +6,7 @@ import { ApiError, UNREACHABLE_MESSAGE } from '../api/client.ts'
 import { documentFileUrl, documentsKey, listDocuments, listParts, partsKey } from '../api/documents.ts'
 import type { DocumentPart, WorkspaceDocument } from '../api/documents.ts'
 import { askQuestion } from '../api/qa.ts'
-import type { Citation } from '../api/qa.ts'
+import type { Citation, UnsupportedSentence } from '../api/qa.ts'
 import type { PartRange } from '../api/search.ts'
 import { Button } from './Button.tsx'
 import { FormError } from './FormError.tsx'
@@ -202,6 +202,7 @@ export function AskQuestion({ workspaceId }: { workspaceId: string }) {
             workspaceId={workspaceId}
             answer={mutation.data.answer}
             citations={mutation.data.citations}
+            unsupported={mutation.data.unsupported}
             selected={selected}
             onSelect={setSelected}
           />
@@ -346,12 +347,14 @@ function AnswerView({
   workspaceId,
   answer,
   citations,
+  unsupported,
   selected,
   onSelect,
 }: {
   workspaceId: string
   answer: string
   citations: Citation[]
+  unsupported: UnsupportedSentence[]
   selected: number | null
   onSelect: (label: number) => void
 }) {
@@ -383,6 +386,7 @@ function AnswerView({
       <p className="mt-3 text-xs text-ink-muted">
         Written by AI from the passages below. Check the sources before relying on it.
       </p>
+      {unsupported.length > 0 && <NotInSources sentences={unsupported} />}
 
       <h3 className="mt-6 border-b border-line pb-2 text-sm font-medium text-ink-muted">
         {sources.length === 1 ? '1 source' : `${sources.length} sources`}
@@ -397,6 +401,28 @@ function AnswerView({
           />
         ))}
       </ol>
+    </div>
+  )
+}
+
+// The answer's sentences the sources don't back: shown, not hidden, so the
+// person can judge them (a conclusion or a calculation can still be right).
+function NotInSources({ sentences }: { sentences: UnsupportedSentence[] }) {
+  return (
+    <div className="mt-4 rounded-sm border-l-4 border-highlight bg-paper-deep px-4 py-3 text-sm">
+      <p className="font-medium">Not found in the sources</p>
+      <ul className="mt-1 space-y-1.5">
+        {sentences.map((flagged) => (
+          <li key={flagged.sentence}>
+            “{flagged.sentence.replace(/\s*\[\d+\]/g, '')}”{' '}
+            <span className="text-ink-muted">
+              {flagged.reason === 'no_source'
+                ? '— cites no source.'
+                : `— ${flagged.numbers.join(', ')} ${flagged.numbers.length === 1 ? "isn't" : "aren't"} in the passage it cites.`}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
