@@ -66,8 +66,21 @@ document to a range of pages or sections. Questions comparing two documents
 from both, with a source from each. When Gemini's usage limit is reached, the
 page says so and when to try again.
 
-**Next — V0.9: AI evaluation.** Scoring the answers themselves: citation
-correctness, faithfulness and unsupported claims.
+**V0.9 — AI evaluation (done).** Answers are scored, not only the passages.
+Gemini's answers to 36 test questions are recorded once
+(`backend/tests/record_answers.py`, run on purpose: it calls Gemini) and scored
+offline with rules on every test run: correct facts, cited answer pages, facts
+backed by the cited passage, sentences with a citation, numbers not in the
+sources, and "not found" for questions the documents don't answer. Baseline:
+30 of 30 answers correct, 6 of 6 unanswerable questions declined, 1 sentence
+in 30 answers without a citation. A test fails if a new recording or a rule
+change scores lower. In the app, every answer's sentences are checked against
+the passages they cite: a sentence with no citation, or with a number its
+sources don't contain (such as a calculation), is listed under the answer as
+**Not found in the sources**, not removed.
+
+**Next — V1.0: production candidate.** Security hardening, performance,
+monitoring, deployment and documentation.
 
 ## Tech stack
 
