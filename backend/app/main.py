@@ -1,9 +1,26 @@
+import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
 from app.api.routes import actions, auth, compare, documents, facts, health, qa, search, workspaces
+from app.documents import embeddings, reranking
 from app.services.documents import fail_interrupted_documents, open_session
+
+logger = logging.getLogger(__name__)
+
+
+def load_models() -> None:
+    """Loads the local embedding model and reranker (downloading them the
+    first time), so the first search or question after a start doesn't wait
+    for it. A failure (no internet for the first download, say) is logged:
+    the models then load on first use, as before."""
+    try:
+        embeddings.embed_query("warm up")
+        reranking.relevance("warm up", ["warm up"])
+    except Exception:
+        logger.exception("Couldn't load the AI models at start-up; they will load on first use")
 
 
 @asynccontextmanager
@@ -12,6 +29,9 @@ async def lifespan(app: FastAPI):
     # finish (their background job died with that run), so mark them failed.
     with open_session() as db:
         fail_interrupted_documents(db)
+    # In the background: the server answers requests straight away, and
+    # anything that needs a model before it's loaded just waits for it.
+    threading.Thread(target=load_models, name="load-models", daemon=True).start()
     yield
 
 
