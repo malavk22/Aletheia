@@ -1,0 +1,494 @@
+{
+  "What is the late payment fee for rent?": {
+    "answer": "If the rent has not arrived by the 10th of the month, a late payment fee of 500 rupees per day is charged until it is paid [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "lease.pdf",
+        "page_number": 2,
+        "text": "Rent and deposit. The rent is 28,000 rupees per month, payable in advance by bank transfer on or before the 5th of each month. If the rent has not arrived by the 10th, a late payment fee of 500 rupees per day is charged until it is paid. Electricity, water and internet bills are paid by the tenant directly to the providers. The tenant pays a security deposit of 56,000 rupees, equal to two months of rent, before moving in. The deposit is returned within 21 days after the keys are given back, less the cost of any damage beyond normal wear and tear and any unpaid rent or bills."
+      }
+    ],
+    "seconds": 4.6,
+    "recorded_on": "2026-10-24"
+  },
+  "How many days of paid annual leave do employees get?": {
+    "answer": "Employees get 24 days of paid annual leave per calendar year [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "hr-policy.pdf",
+        "page_number": 2,
+        "text": "Leave. Employees get 24 days of paid annual leave per calendar year. Up to 5 unused days can be carried over to the next year; the rest lapse. Sick leave is 10 days a year; a doctor’s certificate is needed for more than 3 sick days in a row. Parental leave is 26 weeks for the birth parent and 4 weeks for the other parent. Leave requests are made in the HR portal at least two weeks in advance, except for sick leave."
+      }
+    ],
+    "seconds": 2.2,
+    "recorded_on": "2026-10-24"
+  },
+  "What is the admin address of the AX-300 router?": {
+    "answer": "The admin address for the AX-300 router is 192.168.8.1 [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "router-manual.pdf",
+        "page_number": 2,
+        "text": "Setting up the AX-300. Connect the WAN port to your modem with the network cable and plug in the power adapter. Join the Wi-Fi network called AX300 followed by four characters printed on the label. Open a browser and go to the admin address 192.168.8.1. Sign in with the default admin password printed on the sticker under the router, and choose a new password when asked."
+      }
+    ],
+    "seconds": 3.1,
+    "recorded_on": "2026-10-24"
+  },
+  "How long is the free-look period?": {
+    "answer": "The free-look period is 15 days [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "insurance-policy.pdf",
+        "page_number": 4,
+        "text": "Claims and cancellation. For cashless treatment at a network hospital, tell the insurer within 24 hours of an emergency admission, or 48 hours before a planned one. For reimbursement, send the bills and the discharge summary within 15 days of discharge. You can cancel the policy within 15 days of receiving it, the free-look period, and get the full premium back."
+      }
+    ],
+    "seconds": 2.3,
+    "recorded_on": "2026-10-24"
+  },
+  "Which hosting provider was chosen?": {
+    "answer": "Kestrel Cloud was chosen as the hosting provider [1]. Arjun will prepare the hosting contract with Kestrel Cloud [3].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "meeting-notes.pdf",
+        "page_number": 2,
+        "text": "Decisions. For hosting, the meeting chose Kestrel Cloud over Arcadia Systems, because Kestrel Cloud is 18% cheaper for the same service levels. Two QA contractors will be hired for six weeks to finish testing. The offline mode is dropped from release 1 and moved to release 2, to keep the scope small. The mobile app design stays as approved in January."
+      },
+      {
+        "number": 3,
+        "filename": "meeting-notes.pdf",
+        "page_number": 3,
+        "text": "Risks and next steps. The main risk is that the payment gateway certification slips again. Ravi will contact the gateway provider by 20 March to confirm the new certification date. Lena will update the test plan to include the two contractors. Arjun will prepare the hosting contract with Kestrel Cloud. The next steering meeting is on 2 April 2026."
+      }
+    ],
+    "seconds": 2.4,
+    "recorded_on": "2026-10-24"
+  },
+  "When is the security deposit returned?": {
+    "answer": "The security deposit is returned within 21 days after the keys are given back, less the cost of any damage beyond normal wear and tear and any unpaid rent or bills [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "lease.pdf",
+        "page_number": 2,
+        "text": "Rent and deposit. The rent is 28,000 rupees per month, payable in advance by bank transfer on or before the 5th of each month. If the rent has not arrived by the 10th, a late payment fee of 500 rupees per day is charged until it is paid. Electricity, water and internet bills are paid by the tenant directly to the providers. The tenant pays a security deposit of 56,000 rupees, equal to two months of rent, before moving in. The deposit is returned within 21 days after the keys are given back, less the cost of any damage beyond normal wear and tear and any unpaid rent or bills."
+      }
+    ],
+    "seconds": 2.2,
+    "recorded_on": "2026-10-24"
+  },
+  "What does a blinking orange light mean on the AX-300?": {
+    "answer": "On the AX-300, a blinking orange light means the router is on, but there is no internet connection, and you should check the modem and the cable [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "router-manual.pdf",
+        "page_number": 3,
+        "text": "AX-300 status lights. Solid blue: the router is connected to the internet. Blinking orange: the router is on, but there is no internet connection; check the modem and the cable. Solid red: hardware fault; switch the router off and contact support. No light: the router has no power."
+      }
+    ],
+    "seconds": 2.9,
+    "recorded_on": "2026-10-24"
+  },
+  "As an employee, how do I get my money back for a work trip?": {
+    "answer": "As an employee, work-related expenses are paid back when a claim is submitted in the HR portal within 30 days, with the original receipts [1]. Air travel is booked in economy class through the travel desk [1]. A meal allowance of 1,200 rupees per day is paid when travelling for work [1]. Claims over 20,000 rupees need director approval [1]. Claims are paid with the next monthly salary [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "hr-policy.pdf",
+        "page_number": 3,
+        "text": "Expenses. Work-related expenses are paid back when a claim is submitted in the HR portal within 30 days, with the original receipts. Air travel is booked in economy class through the travel desk. When travelling for work, a meal allowance of 1,200 rupees per day is paid. Claims over 20,000 rupees need the approval of a director before they are paid. Claims are paid with the next monthly salary."
+      }
+    ],
+    "seconds": 3.8,
+    "recorded_on": "2026-10-24"
+  },
+  "I can't log in to my AX-300 internet box any more. How do I start over?": {
+    "answer": "If you have forgotten the admin password for your AX-300, you can press and hold the reset button on the back for 10 seconds [2]. This will restart the router with its factory settings, and you can then set it up again [2].",
+    "citations": [
+      {
+        "number": 2,
+        "filename": "router-manual.pdf",
+        "page_number": 4,
+        "text": "AX-300 troubleshooting. If Wi-Fi is slow, place the router in an open spot, away from walls and metal, or choose another channel in the admin page. If you have forgotten the admin password, press and hold the reset button on the back for 10 seconds: the router restarts with its factory settings, and you set it up again. Firmware updates are installed automatically at 3 am."
+      }
+    ],
+    "seconds": 3.1,
+    "recorded_on": "2026-10-24"
+  },
+  "Why was the go-live date pushed back?": {
+    "answer": "The launch date was moved from March 15 to April 12, 2026, because the certification of the payment gateway was delayed by the provider [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "meeting-notes.pdf",
+        "page_number": 1,
+        "text": "Project Falcon steering meeting, 3 March 2026. Present: Ravi Menon, Lena Vogel, Arjun Rao and Priya Shah. Status: the launch is moved from 15 March to 12 April 2026, because the certification of the payment gateway has been delayed by the provider. The project budget is 4.2 million rupees, of which 2.9 million has been spent so far. The team agreed that quality comes before speed and that a second delay must be avoided."
+      }
+    ],
+    "seconds": 2.1,
+    "recorded_on": "2026-10-24"
+  },
+  "Who pays if I accidentally damage something in the apartment?": {
+    "answer": "The tenant pays for repairing damage that the tenant, members of the household, or guests cause, whether by accident or not [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "lease.pdf",
+        "page_number": 4,
+        "text": "Repairs and maintenance. The tenant must report any damage or fault to the landlord within 48 hours of noticing it. The landlord fixes urgent problems, such as a water leak or a failure of the electricity supply, within 24 hours of being told. The tenant pays for repairing damage that the tenant, members of the household or guests cause, whether by accident or not. Painting the walls, drilling holes or changing the locks needs the landlord’s consent in writing. The landlord may visit to inspect the flat with 24 hours of notice."
+      }
+    ],
+    "seconds": 2.6,
+    "recorded_on": "2026-10-24"
+  },
+  "How much does the health cover cost per year?": {
+    "answer": "The annual premium for the health insurance policy is 18,400 rupees, including taxes [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "insurance-policy.pdf",
+        "page_number": 1,
+        "text": "Health insurance policy summary. Policyholder: Maya Fernandes. Sum insured: 5 lakh rupees per policy year. Policy period: 1 April 2026 to 31 March 2027. Annual premium: 18,400 rupees, including taxes. The policy covers the policyholder only; family members can be added at the next renewal."
+      }
+    ],
+    "seconds": 2.4,
+    "recorded_on": "2026-10-24"
+  },
+  "What happens if I move out after three months?": {
+    "answer": "If you leave after three months, you would be within the six-month lock-in period, so you would need to pay the rent for the remaining time of that lock-in period [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "lease.pdf",
+        "page_number": 5,
+        "text": "Ending the tenancy. Either party may end this agreement by giving the other two months of notice in writing. The first six months are a lock-in period: if the tenant leaves during the lock-in period, the tenant pays the rent for the rest of the lock-in period. At the end of the tenancy the flat is inspected against the inventory in the presence of both parties. All keys and access cards must be returned on the last day."
+      }
+    ],
+    "seconds": 3.3,
+    "recorded_on": "2026-10-24"
+  },
+  "What is Ravi supposed to do?": {
+    "answer": "Ravi will contact the gateway provider by March 20 to confirm the new certification date [2].",
+    "citations": [
+      {
+        "number": 2,
+        "filename": "meeting-notes.pdf",
+        "page_number": 3,
+        "text": "Risks and next steps. The main risk is that the payment gateway certification slips again. Ravi will contact the gateway provider by 20 March to confirm the new certification date. Lena will update the test plan to include the two contractors. Arjun will prepare the hosting contract with Kestrel Cloud. The next steering meeting is on 2 April 2026."
+      }
+    ],
+    "seconds": 2.3,
+    "recorded_on": "2026-10-24"
+  },
+  "What is Lena's task?": {
+    "answer": "Lena will update the test plan to include the two contractors [2]. She previously wrote the first test plan [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "meeting-notes.pdf",
+        "page_number": 4,
+        "text": "Appendix: earlier actions. From the February meeting: Ravi compared the hosting offers, and this is done. Lena wrote the first test plan, and this is done. Priya presented the launch communication plan, which was approved. Arjun collected the release notes for the design review."
+      },
+      {
+        "number": 2,
+        "filename": "meeting-notes.pdf",
+        "page_number": 3,
+        "text": "Risks and next steps. The main risk is that the payment gateway certification slips again. Ravi will contact the gateway provider by 20 March to confirm the new certification date. Lena will update the test plan to include the two contractors. Arjun will prepare the hosting contract with Kestrel Cloud. The next steering meeting is on 2 April 2026."
+      }
+    ],
+    "seconds": 3.3,
+    "recorded_on": "2026-10-24"
+  },
+  "What power adapter does the AX-300 use?": {
+    "answer": "The AX-300 router uses a 12 V 1.5 A power adapter [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "router-manual.pdf",
+        "page_number": 1,
+        "text": "AX-300 router user manual. In the box: the AX-300 Wi-Fi 6 router, a 12 V 1.5 A power adapter, one network cable and this manual. The router has four LAN ports for wired devices and one WAN port for the modem. It supports up to 64 connected devices at the same time."
+      }
+    ],
+    "seconds": 2.9,
+    "recorded_on": "2026-10-24"
+  },
+  "Who is the tenant at 14 Elm Court?": {
+    "answer": "Maya Fernandes is the tenant at the flat at 14 Elm Court, Baner Road, Pune [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "lease.pdf",
+        "page_number": 1,
+        "text": "Tenancy agreement. This agreement is made between Northgate Homes Ltd, the landlord, and Maya Fernandes, the tenant, for the flat at 14 Elm Court, Baner Road, Pune. The flat is let furnished, with the furniture listed in the inventory signed by both parties on the day the keys are handed over. The tenancy starts on 1 February 2026 and runs for 11 months. Only the tenant and the people named in this agreement may live in the flat. The landlord’s representative for all questions about this agreement is the property office of Northgate Homes, open on weekdays."
+      }
+    ],
+    "seconds": 4.8,
+    "recorded_on": "2026-10-26"
+  },
+  "What happens to claims over 20,000 rupees?": {
+    "answer": "Claims over 20,000 rupees need the approval of a director before they are paid [1]. They are paid with the next monthly salary [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "hr-policy.pdf",
+        "page_number": 3,
+        "text": "Expenses. Work-related expenses are paid back when a claim is submitted in the HR portal within 30 days, with the original receipts. Air travel is booked in economy class through the travel desk. When travelling for work, a meal allowance of 1,200 rupees per day is paid. Claims over 20,000 rupees need the approval of a director before they are paid. Claims are paid with the next monthly salary."
+      }
+    ],
+    "seconds": 3.3,
+    "recorded_on": "2026-10-26"
+  },
+  "Why Kestrel Cloud?": {
+    "answer": "Kestrel Cloud was chosen for hosting because it is 18% cheaper than Arcadia Systems for the same service levels [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "meeting-notes.pdf",
+        "page_number": 2,
+        "text": "Decisions. For hosting, the meeting chose Kestrel Cloud over Arcadia Systems, because Kestrel Cloud is 18% cheaper for the same service levels. Two QA contractors will be hired for six weeks to finish testing. The offline mode is dropped from release 1 and moved to release 2, to keep the scope small. The mobile app design stays as approved in January."
+      }
+    ],
+    "seconds": 2.3,
+    "recorded_on": "2026-10-26"
+  },
+  "What is the admin address of the AX-500?": {
+    "answer": "The admin address for the AX-500 is 192.168.10.1 [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "router-ax500-manual.pdf",
+        "page_number": 2,
+        "text": "Setting up the AX-500. Connect the 2.5 gigabit WAN port to your modem and plug in the power adapter. Join the Wi-Fi network called AX500 followed by six characters printed on the label. Open the Aletheon app, or a browser at the admin address 192.168.10.1, and sign in with the setup code on the label."
+      }
+    ],
+    "seconds": 2.2,
+    "recorded_on": "2026-10-26"
+  },
+  "How long is the AX-500 warranty?": {
+    "answer": "The AX-500 has a 3-year warranty from the date of purchase [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "router-ax500-manual.pdf",
+        "page_number": 5,
+        "text": "AX-500 warranty. The AX-500 has a 3-year warranty from the date of purchase, covering manufacturing defects. Accidental damage, such as a drop or a spill, is covered only with the CarePlus plan, bought within 60 days of purchase. Support is open by chat around the clock."
+      }
+    ],
+    "seconds": 2.8,
+    "recorded_on": "2026-10-26"
+  },
+  "How long is the notice period in the lease, and in the employee handbook?": {
+    "answer": "In the lease, either party may end the agreement by giving two months of notice in writing [2]. In the employee handbook, the notice period for permanent employees who resign is 60 days, and for employees during their probation, it is 15 days [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "hr-policy.pdf",
+        "page_number": 4,
+        "text": "Resignation. Permanent employees who resign must give a notice period of 60 days. During probation, which is the first six months of employment, the notice period is 15 days. The final settlement of salary and leave is paid within 45 days of the last working day. Company laptops, phones and access cards must be handed back on the last working day."
+      },
+      {
+        "number": 2,
+        "filename": "lease.pdf",
+        "page_number": 5,
+        "text": "Ending the tenancy. Either party may end this agreement by giving the other two months of notice in writing. The first six months are a lock-in period: if the tenant leaves during the lock-in period, the tenant pays the rent for the rest of the lock-in period. At the end of the tenancy the flat is inspected against the inventory in the presence of both parties. All keys and access cards must be returned on the last day."
+      }
+    ],
+    "seconds": 4.2,
+    "recorded_on": "2026-10-26"
+  },
+  "What is the admin address of the AX-300, and of the AX-500?": {
+    "answer": "The admin address for the AX-300 is 192.168.8.1 [1]. The admin address for the AX-500 is 192.168.10.1 [3].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "router-manual.pdf",
+        "page_number": 2,
+        "text": "Setting up the AX-300. Connect the WAN port to your modem with the network cable and plug in the power adapter. Join the Wi-Fi network called AX300 followed by four characters printed on the label. Open a browser and go to the admin address 192.168.8.1. Sign in with the default admin password printed on the sticker under the router, and choose a new password when asked."
+      },
+      {
+        "number": 3,
+        "filename": "router-ax500-manual.pdf",
+        "page_number": 2,
+        "text": "Setting up the AX-500. Connect the 2.5 gigabit WAN port to your modem and plug in the power adapter. Join the Wi-Fi network called AX500 followed by six characters printed on the label. Open the Aletheon app, or a browser at the admin address 192.168.10.1, and sign in with the setup code on the label."
+      }
+    ],
+    "seconds": 4.0,
+    "recorded_on": "2026-10-26"
+  },
+  "How long is the notice period for employees, and for contractors?": {
+    "answer": "For permanent employees, the notice period for resignation is 60 days [1]. During probation, it is 15 days [1]. For contractors, either side may end a service contract with 7 days of written notice [3].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "hr-policy.pdf",
+        "page_number": 4,
+        "text": "Resignation. Permanent employees who resign must give a notice period of 60 days. During probation, which is the first six months of employment, the notice period is 15 days. The final settlement of salary and leave is paid within 45 days of the last working day. Company laptops, phones and access cards must be handed back on the last working day."
+      },
+      {
+        "number": 3,
+        "filename": "contractor-policy.pdf",
+        "page_number": 3,
+        "text": "Ending a contract. Either side may end a service contract with 7 days of written notice. Brightline Software may end it at once for a serious breach, such as sharing confidential information. All devices and access badges must be returned within 3 days after the contract ends."
+      }
+    ],
+    "seconds": 3.5,
+    "recorded_on": "2026-10-26"
+  },
+  "How much is the flat's deposit, and what is the sum insured?": {
+    "answer": "The flat's security deposit is 56,000 rupees [2]. The sum insured for the health insurance policy is 5 lakh rupees per policy year [1].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "insurance-policy.pdf",
+        "page_number": 1,
+        "text": "Health insurance policy summary. Policyholder: Maya Fernandes. Sum insured: 5 lakh rupees per policy year. Policy period: 1 April 2026 to 31 March 2027. Annual premium: 18,400 rupees, including taxes. The policy covers the policyholder only; family members can be added at the next renewal."
+      },
+      {
+        "number": 2,
+        "filename": "lease.pdf",
+        "page_number": 2,
+        "text": "Rent and deposit. The rent is 28,000 rupees per month, payable in advance by bank transfer on or before the 5th of each month. If the rent has not arrived by the 10th, a late payment fee of 500 rupees per day is charged until it is paid. Electricity, water and internet bills are paid by the tenant directly to the providers. The tenant pays a security deposit of 56,000 rupees, equal to two months of rent, before moving in. The deposit is returned within 21 days after the keys are given back, less the cost of any damage beyond normal wear and tear and any unpaid rent or bills."
+      }
+    ],
+    "seconds": 3.5,
+    "recorded_on": "2026-10-26"
+  },
+  "Who must give longer notice to leave: an employee or a contractor?": {
+    "answer": "An employee must give a notice period of 60 days, or 15 days if they are within their first six months of employment [1]. A contractor must give 7 days of written notice to end their service contract [4]. Therefore, an employee must give longer notice to leave [1][4].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "hr-policy.pdf",
+        "page_number": 4,
+        "text": "Resignation. Permanent employees who resign must give a notice period of 60 days. During probation, which is the first six months of employment, the notice period is 15 days. The final settlement of salary and leave is paid within 45 days of the last working day. Company laptops, phones and access cards must be handed back on the last working day."
+      },
+      {
+        "number": 4,
+        "filename": "contractor-policy.pdf",
+        "page_number": 3,
+        "text": "Ending a contract. Either side may end a service contract with 7 days of written notice. Brightline Software may end it at once for a serious breach, such as sharing confidential information. All devices and access badges must be returned within 3 days after the contract ends."
+      }
+    ],
+    "seconds": 2.8,
+    "recorded_on": "2026-10-26"
+  },
+  "Which router supports more connected devices, the AX-300 or the AX-500?": {
+    "answer": "The AX-500 router supports up to 128 connected devices at the same time [1]. The AX-300 router supports up to 64 connected devices at the same time [2]. Therefore, the AX-500 supports more connected devices.",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "router-ax500-manual.pdf",
+        "page_number": 1,
+        "text": "AX-500 router user manual. In the box: the AX-500 Wi-Fi 6E tri-band router, a 12 V 2 A power adapter, two network cables and this manual. The AX-500 has four LAN ports, one 2.5 gigabit WAN port and a USB port for sharing a drive. It supports up to 128 connected devices at the same time."
+      },
+      {
+        "number": 2,
+        "filename": "router-manual.pdf",
+        "page_number": 1,
+        "text": "AX-300 router user manual. In the box: the AX-300 Wi-Fi 6 router, a 12 V 1.5 A power adapter, one network cable and this manual. The router has four LAN ports for wired devices and one WAN port for the modem. It supports up to 64 connected devices at the same time."
+      }
+    ],
+    "seconds": 4.2,
+    "recorded_on": "2026-10-26"
+  },
+  "Is the AX-500 warranty longer than the AX-300 warranty?": {
+    "answer": "Yes, the AX-500 warranty is longer than the AX-300 warranty [1][2]. The AX-500 has a 3-year warranty from the date of purchase [1]. The AX-300 has a 2-year warranty from the date of purchase [2].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "router-ax500-manual.pdf",
+        "page_number": 5,
+        "text": "AX-500 warranty. The AX-500 has a 3-year warranty from the date of purchase, covering manufacturing defects. Accidental damage, such as a drop or a spill, is covered only with the CarePlus plan, bought within 60 days of purchase. Support is open by chat around the clock."
+      },
+      {
+        "number": 2,
+        "filename": "router-manual.pdf",
+        "page_number": 5,
+        "text": "Warranty and support. The AX-300 has a 2-year warranty from the date of purchase. The warranty covers manufacturing defects. It does not cover damage from water, from dropping the router, or from opening its case. Register the router online within 30 days of purchase to extend the warranty by 6 months. Phone support is open from 8 am to 8 pm, every day."
+      }
+    ],
+    "seconds": 2.7,
+    "recorded_on": "2026-10-26"
+  },
+  "Do employees or contractors have to change their passwords more often?": {
+    "answer": "Contractors have to change their passwords every 60 days [1]. Employees must change their passwords every 90 days [2]. Therefore, contractors have to change their passwords more often [1][2].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "contractor-policy.pdf",
+        "page_number": 4,
+        "text": "Access and passwords for contractors. Contractors get an account that expires when the contract ends. Their passwords must be changed every 60 days and must not be reused. Contractors may only use the systems named in their contract."
+      },
+      {
+        "number": 2,
+        "filename": "hr-policy.pdf",
+        "page_number": 5,
+        "text": "Conduct and IT security. Passwords for company systems must be changed every 90 days and never shared. Security incidents, such as a lost laptop or a suspicious email, must be reported to the IT security team within one hour. Company cloud storage may not be used for personal files. Complaints of harassment are handled confidentially by the Internal Committee."
+      }
+    ],
+    "seconds": 3.0,
+    "recorded_on": "2026-10-26"
+  },
+  "Which costs more per month: the flat's rent or the health insurance premium?": {
+    "answer": "The flat's rent is 28,000 rupees per month [1]. The annual health insurance premium is 18,400 rupees, which is approximately 1,533.33 rupees per month [2]. Therefore, the flat's rent costs more per month [1][2].",
+    "citations": [
+      {
+        "number": 1,
+        "filename": "lease.pdf",
+        "page_number": 2,
+        "text": "Rent and deposit. The rent is 28,000 rupees per month, payable in advance by bank transfer on or before the 5th of each month. If the rent has not arrived by the 10th, a late payment fee of 500 rupees per day is charged until it is paid. Electricity, water and internet bills are paid by the tenant directly to the providers. The tenant pays a security deposit of 56,000 rupees, equal to two months of rent, before moving in. The deposit is returned within 21 days after the keys are given back, less the cost of any damage beyond normal wear and tear and any unpaid rent or bills."
+      },
+      {
+        "number": 2,
+        "filename": "insurance-policy.pdf",
+        "page_number": 1,
+        "text": "Health insurance policy summary. Policyholder: Maya Fernandes. Sum insured: 5 lakh rupees per policy year. Policy period: 1 April 2026 to 31 March 2027. Annual premium: 18,400 rupees, including taxes. The policy covers the policyholder only; family members can be added at the next renewal."
+      }
+    ],
+    "seconds": 3.5,
+    "recorded_on": "2026-10-26"
+  },
+  "What is the landlord's phone number?": {
+    "answer": "The documents in this workspace don't answer this question.",
+    "citations": [],
+    "seconds": 2.4,
+    "recorded_on": "2026-10-26"
+  },
+  "How many floors does the building at 14 Elm Court have?": {
+    "answer": "The documents in this workspace don't answer this question.",
+    "citations": [],
+    "seconds": 3.0,
+    "recorded_on": "2026-10-26"
+  },
+  "What colour is the AX-300 router?": {
+    "answer": "The documents in this workspace don't answer this question.",
+    "citations": [],
+    "seconds": 2.8,
+    "recorded_on": "2026-10-26"
+  },
+  "What is the salary of a permanent employee?": {
+    "answer": "The documents in this workspace don't answer this question.",
+    "citations": [],
+    "seconds": 2.6,
+    "recorded_on": "2026-10-26"
+  },
+  "Does the AX-500 support Bluetooth?": {
+    "answer": "The documents in this workspace don't answer this question.",
+    "citations": [],
+    "seconds": 2.8,
+    "recorded_on": "2026-10-26"
+  },
+  "When was Brightline Software founded?": {
+    "answer": "The documents in this workspace don't answer this question.",
+    "citations": [],
+    "seconds": 2.4,
+    "recorded_on": "2026-10-26"
+  }
+}
